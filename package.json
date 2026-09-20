@@ -11,6 +11,8 @@
     "dev": "node --watch src/server.js",
     "start:python": "uvicorn server:app --app-dir src/python --reload --port 8000",
     "validate:schemas": "python scripts/validate_schemas.py",
+    "test": "node --test tests/*.test.js",
+    "test:python": "python -m pytest tests/test_python_server.py",
     "mcp:install": "npm --prefix mcp-server install",
     "mcp:build": "npm --prefix mcp-server run build",
     "mcp:start": "npm --prefix mcp-server start"

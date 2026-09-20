@@ -32,9 +32,9 @@ export class FastBuyJSONMockAdapter {
   
   constructor(baseUrl?: string) {
     // Mock implementation - no real HTTP client needed
-    console.log('FastBuyJSON Mock Adapter initialized');
-    console.log('Note: This is a reference implementation with mock data');
-    console.log('For production use, visit: https://fastbuyjson.com');
+    console.error('FastBuyJSON Mock Adapter initialized');
+    console.error('Note: This is a reference implementation with mock data');
+    console.error('For production use, visit: https://fastbuyjson.com');
   }
 
   /**

@@ -5,6 +5,8 @@ This module provides JWT and certificate-based authentication utilities.
 """
 
 import hashlib
+import hmac
+import os
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
@@ -13,30 +15,40 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from jose import jwt, JWTError
 
-# For demo purposes, we use hardcoded secrets
-# In production, these should be stored securely and loaded from environment variables
-JWT_SECRET = "fastbuyjson-demo-secret-key-change-in-production"
-JWT_REFRESH_SECRET = "fastbuyjson-demo-refresh-secret-key-change-in-production"
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRES_IN = 3600  # 1 hour in seconds
-JWT_REFRESH_EXPIRES_IN = 7 * 24 * 3600  # 7 days in seconds
 
-# Security scheme for JWT auth
+def _env_secret(name: str, fallback: str) -> str:
+    value = os.environ.get(name)
+    if value:
+        return value
+    if os.environ.get("NODE_ENV") == "production" or os.environ.get("ENV") == "production":
+        raise RuntimeError(f"{name} must be set in production")
+    return fallback
+
+
+JWT_SECRET = _env_secret(
+    "JWT_SECRET", "fastbuyjson-demo-secret-key-change-in-production"
+)
+JWT_REFRESH_SECRET = _env_secret(
+    "JWT_REFRESH_SECRET", "fastbuyjson-demo-refresh-secret-key-change-in-production"
+)
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRES_IN = int(os.environ.get("JWT_EXPIRES_IN_SECONDS", "3600"))
+JWT_REFRESH_EXPIRES_IN = int(os.environ.get("JWT_REFRESH_EXPIRES_IN_SECONDS", str(7 * 24 * 3600)))
+
 security = HTTPBearer()
 
-# Mock user database
 USERS = [
     {
         "id": "user1",
         "username": "demo",
-        "password": "password123",  # In production, store hashed passwords only
+        "password": os.environ.get("DEMO_PASSWORD", "password123"),
         "email": "demo@example.com",
         "roles": ["customer"],
     },
     {
         "id": "user2",
         "username": "admin",
-        "password": "admin123",
+        "password": os.environ.get("ADMIN_PASSWORD", "admin123"),
         "email": "admin@example.com",
         "roles": ["admin", "customer"],
     },
@@ -60,14 +72,10 @@ class TokenData(BaseModel):
 
 def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
     """Authenticate a user with username and password"""
-    # Find user by username
     user = next((u for u in USERS if u["username"] == username), None)
-    
-    # Check if user exists and password matches
-    if not user or user["password"] != password:
+    if not user or not password or not hmac.compare_digest(user["password"], password):
         return None
-    
-    # Return user without password
+
     return {k: v for k, v in user.items() if k != "password"}
 
 
@@ -213,6 +221,29 @@ async def get_current_user(
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Return user without password
+
     return {k: v for k, v in user.items() if k != "password"}
+
+
+def get_request_user_id(authorization: Optional[str] = None) -> str:
+    """Resolve JWT subject or anonymous guest identity."""
+    if not authorization:
+        return "anonymous"
+
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization header",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_data = verify_token(parts[1])
+    if not token_data:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return token_data.sub

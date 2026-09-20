@@ -6,30 +6,53 @@
 
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-// For demo purposes, we use a hardcoded secret
-// In production, this should be stored securely and loaded from environment variables
-const JWT_SECRET = 'fastbuyjson-demo-secret-key-change-in-production';
-const JWT_REFRESH_SECRET = 'fastbuyjson-demo-refresh-secret-key-change-in-production';
-const JWT_EXPIRES_IN = '1h';
-const JWT_REFRESH_EXPIRES_IN = '7d';
+function requireSecret(name, fallback) {
+  const value = process.env[name];
+  if (value) {
+    return value;
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`${name} must be set in production`);
+  }
+  return fallback;
+}
 
-// Mock user database
+function secretsEqual(expected, provided) {
+  if (typeof expected !== 'string' || typeof provided !== 'string') {
+    return false;
+  }
+  const left = Buffer.from(expected);
+  const right = Buffer.from(provided);
+  if (left.length !== right.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(left, right);
+}
+
+const JWT_SECRET = requireSecret(
+  'JWT_SECRET',
+  'fastbuyjson-demo-secret-key-change-in-production'
+);
+const JWT_REFRESH_SECRET = requireSecret(
+  'JWT_REFRESH_SECRET',
+  'fastbuyjson-demo-refresh-secret-key-change-in-production'
+);
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
+const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+
 const users = [
   {
     id: 'user1',
     username: 'demo',
-    password: 'password123', // In production, store hashed passwords only
+    password: process.env.DEMO_PASSWORD || 'password123',
     email: 'demo@example.com',
     roles: ['customer']
   },
   {
     id: 'user2',
     username: 'admin',
-    password: 'admin123',
+    password: process.env.ADMIN_PASSWORD || 'admin123',
     email: 'admin@example.com',
     roles: ['admin', 'customer']
   }
@@ -141,11 +164,8 @@ export function refreshAccessToken(refreshToken) {
  * @returns {Object|null} User object or null if authentication fails
  */
 export function authenticateUser(username, password) {
-  // Find user by username
   const user = users.find(u => u.username === username);
-  
-  // Check if user exists and password matches
-  if (!user || user.password !== password) {
+  if (!user || !secretsEqual(user.password, password)) {
     return null;
   }
 
@@ -211,8 +231,8 @@ export function verifyJwtMiddleware(req, res, next) {
     // Verify token
     const decoded = jwt.verify(token, JWT_SECRET);
     
-    // Add user info to request
     req.user = decoded;
+    req.userId = decoded.sub;
     
     next();
   } catch (error) {
@@ -259,4 +279,19 @@ export function verifyCertificateMiddleware(req, res, next) {
   req.certificateSession = session;
   
   next();
+}
+
+/**
+ * Optional JWT: missing Authorization is treated as the guest identity.
+ * A present but invalid Bearer token is rejected.
+ */
+export function optionalJwtMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    req.userId = 'anonymous';
+    return next();
+  }
+
+  return verifyJwtMiddleware(req, res, next);
 }

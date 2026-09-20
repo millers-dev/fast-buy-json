@@ -20,8 +20,19 @@
             "type": "object",
             "description": "Customer contact information for order confirmation and communication",
             "required": [
-                "email",
-                "phoneNumber"
+                "email"
+            ],
+            "anyOf": [
+                {
+                    "required": [
+                        "phone"
+                    ]
+                },
+                {
+                    "required": [
+                        "phoneNumber"
+                    ]
+                }
             ],
             "properties": {
                 "email": {
@@ -32,9 +43,17 @@
                         "customer@example.com"
                     ]
                 },
-                "phoneNumber": {
+                "phone": {
                     "type": "string",
                     "description": "Customer phone number for shipping updates and verification",
+                    "pattern": "^\\+?[0-9\\s\\-\\(\\)]{8,20}$",
+                    "examples": [
+                        "+49 30 12345678"
+                    ]
+                },
+                "phoneNumber": {
+                    "type": "string",
+                    "description": "Legacy alias for phone",
                     "pattern": "^\\+?[0-9\\s\\-\\(\\)]{8,20}$",
                     "examples": [
                         "+49 30 12345678"

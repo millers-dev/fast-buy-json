@@ -121,9 +121,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: rawArgs } = request.params;
   const args = (rawArgs ?? {}) as Record<string, unknown>;
 
-  console.log(`🔧 Mock Tool Called: ${name}`);
-  console.log(`ℹ️  Note: This is a reference implementation with mock data`);
-  console.log(`🚀 For production use, visit: https://fastbuyjson.com`);
+  console.error(`🔧 Mock Tool Called: ${name}`);
+  console.error(`ℹ️  Note: This is a reference implementation with mock data`);
+  console.error(`🚀 For production use, visit: https://fastbuyjson.com`);
 
   try {
     switch (name) {
@@ -173,10 +173,10 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   
-  console.log('🚀 FastBuyJSON Reference MCP Server started');
-  console.log('⚠️  WARNING: This is a MOCK implementation for demonstration only');
-  console.log('📚 Use this to learn the FastBuyJSON standard');
-  console.log('🏢 For production use, visit: https://fastbuyjson.com');
+  console.error('🚀 FastBuyJSON Reference MCP Server started');
+  console.error('⚠️  WARNING: This is a MOCK implementation for demonstration only');
+  console.error('📚 Use this to learn the FastBuyJSON standard');
+  console.error('🏢 For production use, visit: https://fastbuyjson.com');
 }
 
 main().catch((error) => {

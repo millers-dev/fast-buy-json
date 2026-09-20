@@ -94,8 +94,8 @@ async function runTests() {
         console.log();
 
         const sessionToken = checkoutInitResult.sessionToken;
+        const verificationToken = checkoutInitResult.verificationToken;
 
-        // Test 7: Confirm Checkout
         if (sessionToken) {
           console.log("7️⃣ Testing checkout confirmation...");
           const confirmResult = await adapter.confirmCheckout({
@@ -108,7 +108,7 @@ async function runTests() {
               },
               transactionVerification: {
                 verificationMethod: "email_confirmation",
-                verificationToken: "test-verification-123",
+                verificationToken: verificationToken,
                 verificationTimestamp: new Date().toISOString(),
               },
             },

@@ -38,7 +38,7 @@
                         ],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"username\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+                            "raw": "{\n  \"username\": \"demo\",\n  \"password\": \"password123\"\n}"
                         },
                         "url": {
                             "raw": "{{baseUrl}}/auth/login",
@@ -347,6 +347,9 @@
                                     "    pm.environment.set(\"sessionToken\", jsonData.sessionToken);",
                                     "    console.log('Session token set:', jsonData.sessionToken);",
                                     "}",
+                                    "if (jsonData.verificationToken) {",
+                                    "    pm.environment.set(\"verificationToken\", jsonData.verificationToken);",
+                                    "}",
                                     "",
                                     "// Also store expiresAt if available",
                                     "if (jsonData.expiresAt) {",
@@ -444,7 +447,7 @@
                         ],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"sessionToken\": \"{{sessionToken}}\",\n  \"paymentDetails\": {\n    \"method\": \"credit_card\",\n    \"cardDetails\": {\n      \"lastFourDigits\": \"4242\",\n      \"brand\": \"Visa\"\n    },\n    \"transactionVerification\": {\n      \"verificationMethod\": \"email_confirmation\",\n      \"verificationToken\": \"demo-token\"\n    }\n  }\n}"
+                            "raw": "{\n  \"sessionToken\": \"{{sessionToken}}\",\n  \"paymentDetails\": {\n    \"method\": \"credit_card\",\n    \"cardDetails\": {\n      \"lastFourDigits\": \"4242\",\n      \"brand\": \"Visa\"\n    },\n    \"transactionVerification\": {\n      \"verificationMethod\": \"email_confirmation\",\n      \"verificationToken\": \"{{verificationToken}}\"\n    }\n  }\n}"
                         },
                         "url": {
                             "raw": "{{baseUrl}}/checkout/confirm",

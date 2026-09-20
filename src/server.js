@@ -9,13 +9,13 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { v4 as uuidv4 } from "uuid";
+import { pathToFileURL } from "node:url";
 import {
   authenticateUser,
   generateTokens,
   refreshAccessToken,
   verifyCertificate,
-  verifyJwtMiddleware,
-  verifyCertificateMiddleware,
+  optionalJwtMiddleware,
 } from "./auth.js";
 
 // Mock database
@@ -99,18 +99,25 @@ const PORT = process.env.PORT || 3000;
 // Create router for API with standardized path
 const apiRouter = express.Router();
 
-// Middleware
+const corsOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+  : true;
+
 app.use(express.json());
-app.use(cors());
+app.use(
+  cors({
+    origin: corsOrigins,
+    credentials: true,
+  })
+);
 app.use(helmet());
 
-// Apply router to standardized path
 app.use("/api/fastbuyjson", apiRouter);
 
-// Store idempotency keys to prevent duplicate operations
-const processedIdempotencyKeys = new Set();
+const processedIdempotencyKeys = new Map();
 
-// Middleware to handle idempotency
 function idempotencyMiddleware(req, res, next) {
   const idempotencyKey = req.headers["idempotency-key"];
 
@@ -118,15 +125,33 @@ function idempotencyMiddleware(req, res, next) {
     return next();
   }
 
-  if (processedIdempotencyKeys.has(idempotencyKey)) {
-    return res.status(409).json({
-      error: "Idempotent request already processed",
-      requestId: idempotencyKey,
-    });
+  const cached = processedIdempotencyKeys.get(idempotencyKey);
+  if (cached) {
+    return res.status(cached.status).json(cached.body);
   }
 
-  processedIdempotencyKeys.add(idempotencyKey);
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      processedIdempotencyKeys.set(idempotencyKey, {
+        status: res.statusCode,
+        body,
+      });
+    }
+    return originalJson(body);
+  };
+
   next();
+}
+
+function requestUserId(req) {
+  return req.userId || "anonymous";
+}
+
+export function resetDemoState() {
+  db.carts = {};
+  db.orders = {};
+  processedIdempotencyKeys.clear();
 }
 
 // Function to calculate risk score
@@ -337,7 +362,6 @@ apiRouter.post("/products/search", (req, res) => {
     // Add more filter handling as needed
   }
 
-  // Apply sorting
   if (sort) {
     switch (sort) {
       case "price_asc":
@@ -346,7 +370,22 @@ apiRouter.post("/products/search", (req, res) => {
       case "price_desc":
         results.sort((a, b) => b.price.amount - a.price.amount);
         break;
-      // Add more sorting options as needed
+      case "name_asc":
+        results.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case "name_desc":
+        results.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      case "newest":
+        results.sort((a, b) => b.id.localeCompare(a.id));
+        break;
+      case "relevance":
+        break;
+      default: {
+        const _exhaustive = sort;
+        void _exhaustive;
+        break;
+      }
     }
   }
 
@@ -370,10 +409,9 @@ apiRouter.post("/products/search", (req, res) => {
  * Add to Cart Endpoint
  * Adds a product to the user's cart
  */
-apiRouter.post("/cart/add", idempotencyMiddleware, (req, res) => {
+apiRouter.post("/cart/add", optionalJwtMiddleware, idempotencyMiddleware, (req, res) => {
   const { productId, quantity = 1, options = {} } = req.body;
 
-  // Validate product exists
   const product = db.products.find((p) => p.id === productId);
   if (!product) {
     return res.status(404).json({
@@ -382,9 +420,7 @@ apiRouter.post("/cart/add", idempotencyMiddleware, (req, res) => {
     });
   }
 
-  // Find or create a cart for the user
-  // In a real app, we would get the user ID from authentication
-  const userId = req.headers["x-user-id"] || "anonymous";
+  const userId = requestUserId(req);
 
   if (!db.carts[userId]) {
     db.carts[userId] = {
@@ -466,8 +502,8 @@ apiRouter.post("/cart/add", idempotencyMiddleware, (req, res) => {
  * Get Cart Endpoint
  * Retrieves the current state of the user's cart
  */
-apiRouter.get("/cart", (req, res) => {
-  const userId = req.headers["x-user-id"] || "anonymous";
+apiRouter.get("/cart", optionalJwtMiddleware, (req, res) => {
+  const userId = requestUserId(req);
 
   if (!db.carts[userId]) {
     return res.status(404).json({
@@ -484,32 +520,25 @@ apiRouter.get("/cart", (req, res) => {
  * Get Cart by ID
  * Retrieves a cart by its cartId. Searches all stored carts and returns the match.
  */
-apiRouter.get("/cart/:cartId", (req, res) => {
+apiRouter.get("/cart/:cartId", optionalJwtMiddleware, (req, res) => {
   const { cartId } = req.params;
+  const userId = requestUserId(req);
+  const ownedCart = db.carts[userId];
 
-  // If caller provided a user context and it matches, prefer that cart
-  const userId = req.headers["x-user-id"] || null;
-  if (userId && db.carts[userId] && db.carts[userId].id === cartId) {
-    return res.json({ cart: db.carts[userId] });
+  if (ownedCart && ownedCart.id === cartId) {
+    return res.json({ cart: ownedCart });
   }
 
-  // Otherwise, search all carts for the given cartId
-  const foundEntry = Object.values(db.carts).find((c) => c.id === cartId);
-  if (!foundEntry) {
-    return res.status(404).json({ error: "Cart not found", cartId });
-  }
-
-  // Note: production systems should enforce authorization checks here.
-  res.json({ cart: foundEntry });
+  return res.status(404).json({ error: "Cart not found", cartId });
 });
 
 /**
  * Checkout - Initiate Endpoint
  * Starts the checkout process with shipping and billing information
  */
-apiRouter.post("/checkout/initiate", (req, res) => {
+apiRouter.post("/checkout/initiate", optionalJwtMiddleware, (req, res) => {
   const { cartId, shippingAddress, billingAddress, customerInfo } = req.body;
-  const userId = req.headers["x-user-id"] || "anonymous";
+  const userId = requestUserId(req);
 
   // Validate cart exists
   if (!db.carts[userId] || db.carts[userId].id !== cartId) {
@@ -563,30 +592,33 @@ apiRouter.post("/checkout/initiate", (req, res) => {
     });
   }
 
-  // Create checkout session
   const sessionToken = uuidv4();
+  const verificationToken = uuidv4();
   const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + 1); // Session expires in 1 hour
+  expiresAt.setHours(expiresAt.getHours() + 1);
 
-  // In a real app, we would store this in a database
+  const riskScore = calculateRiskScore(
+    customerInfo,
+    shippingAddress,
+    db.carts[userId]
+  );
+
   db.carts[userId].checkoutSession = {
     sessionToken,
+    verificationToken,
     expiresAt: expiresAt.toISOString(),
     shippingAddress,
-    billingAddress: billingAddress || shippingAddress, // Use shipping as billing if not provided
+    billingAddress: billingAddress || shippingAddress,
     customerInfo,
     riskAssessment: {
-      score: calculateRiskScore(
-        customerInfo,
-        shippingAddress,
-        db.carts[userId]
-      ),
+      score: riskScore,
       verificationRequired: true,
     },
   };
 
   res.json({
     sessionToken,
+    verificationToken,
     expiresAt: expiresAt.toISOString(),
     cart: db.carts[userId],
     riskAssessment: db.carts[userId].checkoutSession.riskAssessment,
@@ -597,9 +629,9 @@ apiRouter.post("/checkout/initiate", (req, res) => {
  * Checkout - Confirm Endpoint
  * Completes the checkout process and creates an order
  */
-apiRouter.post("/checkout/confirm", (req, res) => {
+apiRouter.post("/checkout/confirm", optionalJwtMiddleware, (req, res) => {
   const { sessionToken, paymentDetails } = req.body;
-  const userId = req.headers["x-user-id"] || "anonymous";
+  const userId = requestUserId(req);
 
   // Validate session
   if (
@@ -684,6 +716,15 @@ apiRouter.post("/checkout/confirm", (req, res) => {
     });
   }
 
+  const expectedToken = db.carts[userId].checkoutSession.verificationToken;
+  const providedToken =
+    paymentDetails.transactionVerification.verificationToken;
+  if (!expectedToken || providedToken !== expectedToken) {
+    return res.status(400).json({
+      error: "Invalid verification token",
+    });
+  }
+
   // Create order
   const orderId = uuidv4();
   const order = {
@@ -733,10 +774,12 @@ apiRouter.post("/checkout/confirm", (req, res) => {
  * Order Status Endpoint
  * Retrieves the current state of an order
  */
-apiRouter.get("/orders/:orderId", (req, res) => {
+apiRouter.get("/orders/:orderId", optionalJwtMiddleware, (req, res) => {
   const { orderId } = req.params;
+  const userId = requestUserId(req);
+  const order = db.orders[orderId];
 
-  if (!db.orders[orderId]) {
+  if (!order || order.userId !== userId) {
     return res.status(404).json({
       error: "Order not found",
       orderId,
@@ -744,25 +787,18 @@ apiRouter.get("/orders/:orderId", (req, res) => {
   }
 
   res.json({
-    order: db.orders[orderId],
+    order,
   });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`FastBuyJSON demo server running at http://localhost:${PORT}`);
-  console.log(`API is available at http://localhost:${PORT}/api/fastbuyjson`);
-  console.log("Available endpoints:");
-  console.log("- GET /api/fastbuyjson/detect");
-  console.log("- POST /api/fastbuyjson/auth/login");
-  console.log("- POST /api/fastbuyjson/auth/refresh");
-  console.log("- POST /api/fastbuyjson/auth/certificate");
-  console.log("- POST /api/fastbuyjson/products/search");
-  console.log("- POST /api/fastbuyjson/cart/add");
-  console.log("- GET /api/fastbuyjson/cart");
-  console.log("- POST /api/fastbuyjson/checkout/initiate");
-  console.log("- POST /api/fastbuyjson/checkout/confirm");
-  console.log("- GET /api/fastbuyjson/orders/:orderId");
-});
+const isDirectRun =
+  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 
-export default app; // Export for testing
+if (isDirectRun) {
+  app.listen(PORT, () => {
+    console.log(`FastBuyJSON demo server running at http://localhost:${PORT}`);
+    console.log(`API is available at http://localhost:${PORT}/api/fastbuyjson`);
+  });
+}
+
+export default app;

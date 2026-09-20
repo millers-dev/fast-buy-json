@@ -15,7 +15,7 @@ export interface SearchProductsParams {
     minPrice?: number;
     maxPrice?: number;
   };
-  sort?: 'price_asc' | 'price_desc' | 'name_asc' | 'name_desc';
+  sort?: 'price_asc' | 'price_desc' | 'name_asc' | 'name_desc' | 'relevance' | 'newest';
   page?: number;
   pageSize?: number;
 }

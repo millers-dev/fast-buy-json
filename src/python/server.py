@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, Response, HTTPException, Header, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional, Dict, Any, List, Set
+from fastapi.responses import JSONResponse
+from typing import Optional, Dict, Any, List
 from uuid import uuid4
 from datetime import datetime, timedelta
 import json
@@ -8,7 +9,6 @@ import os
 import copy
 from pydantic import BaseModel, Field, EmailStr
 
-# Import auth utilities
 from auth import (
     authenticate_user,
     create_access_token,
@@ -16,6 +16,7 @@ from auth import (
     refresh_access_token,
     verify_certificate,
     get_current_user,
+    get_request_user_id,
 )
 
 app = FastAPI(
@@ -28,10 +29,16 @@ app = FastAPI(
 api_router = FastAPI()
 app.mount("/api/fastbuyjson", api_router)
 
-# Enable CORS
+_cors_origins = [
+    origin.strip()
+    for origin in os.environ.get(
+        "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+    ).split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -133,8 +140,14 @@ DB = {
     "checkout_sessions": {},
 }
 
-# Store processed idempotency keys
-processed_idempotency_keys: Set[str] = set()
+processed_idempotency_keys: Dict[str, Dict[str, Any]] = {}
+
+
+def reset_demo_state() -> None:
+    DB["carts"].clear()
+    DB["orders"].clear()
+    DB["checkout_sessions"].clear()
+    processed_idempotency_keys.clear()
 
 
 def calculate_risk_score(
@@ -321,7 +334,14 @@ async def search_products(request: Request):
             results.sort(key=lambda p: p["price"]["amount"])
         elif sort == "price_desc":
             results.sort(key=lambda p: p["price"]["amount"], reverse=True)
-        # Add more sorting options as needed
+        elif sort == "name_asc":
+            results.sort(key=lambda p: p["name"])
+        elif sort == "name_desc":
+            results.sort(key=lambda p: p["name"], reverse=True)
+        elif sort == "newest":
+            results.sort(key=lambda p: p["id"], reverse=True)
+        elif sort == "relevance":
+            pass
 
     # Apply pagination
     total_items = len(results)
@@ -341,26 +361,20 @@ async def search_products(request: Request):
 
 
 @api_router.post("/cart/add")
-async def add_to_cart(request: Request, idempotency_key: Optional[str] = Header(None)):
-    # Check idempotency
+async def add_to_cart(
+    request: Request,
+    idempotency_key: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
+):
     if idempotency_key and idempotency_key in processed_idempotency_keys:
-        return Response(
-            status_code=409,
-            content=json.dumps(
-                {
-                    "error": "Idempotent request already processed",
-                    "requestId": idempotency_key,
-                }
-            ),
-            media_type="application/json",
-        )
+        cached = processed_idempotency_keys[idempotency_key]
+        return JSONResponse(status_code=cached["status"], content=cached["body"])
 
     data = await request.json()
     product_id = data.get("productId")
     quantity = data.get("quantity", 1)
     options = data.get("options", {})
 
-    # Validate product exists
     product = next((p for p in DB["products"] if p["id"] == product_id), None)
     if not product:
         raise HTTPException(
@@ -368,9 +382,7 @@ async def add_to_cart(request: Request, idempotency_key: Optional[str] = Header(
             detail={"error": "Product not found", "productId": product_id},
         )
 
-    # Find or create cart
-    # In a real app, we would get user ID from authentication
-    user_id = "anonymous"
+    user_id = get_request_user_id(authorization)
 
     if user_id not in DB["carts"]:
         cart_id = str(uuid4())
@@ -449,17 +461,16 @@ async def add_to_cart(request: Request, idempotency_key: Optional[str] = Header(
         cart["totals"]["subtotal"] + cart["totals"]["tax"] + cart["totals"]["shipping"]
     )
 
-    # Store idempotency key
+    payload = {"cart": cart, "message": "Item added to cart successfully"}
     if idempotency_key:
-        processed_idempotency_keys.add(idempotency_key)
+        processed_idempotency_keys[idempotency_key] = {"status": 200, "body": payload}
 
-    return {"cart": cart, "message": "Item added to cart successfully"}
+    return payload
 
 
 @api_router.get("/cart")
-async def get_cart():
-    # In a real app, we would get user ID from authentication
-    user_id = "anonymous"
+async def get_cart(authorization: Optional[str] = Header(None)):
+    user_id = get_request_user_id(authorization)
 
     if user_id not in DB["carts"]:
         raise HTTPException(
@@ -470,16 +481,11 @@ async def get_cart():
 
 
 @api_router.get("/cart/{cart_id}")
-async def get_cart_by_id(cart_id: str):
-    """
-    Retrieve a cart by its identifier. Useful for guest or agent workflows that
-    only have a cartId. Servers should enforce authorization checks in production.
-    """
-    # If anonymous demo cart matches, return it
-    # Check if any stored cart has matching id
-    for stored in DB["carts"].values():
-        if stored.get("id") == cart_id:
-            return {"cart": stored}
+async def get_cart_by_id(cart_id: str, authorization: Optional[str] = Header(None)):
+    user_id = get_request_user_id(authorization)
+    owned = DB["carts"].get(user_id)
+    if owned and owned.get("id") == cart_id:
+        return {"cart": owned}
 
     raise HTTPException(
         status_code=404, detail={"error": "Cart not found", "cartId": cart_id}
@@ -487,15 +493,16 @@ async def get_cart_by_id(cart_id: str):
 
 
 @api_router.post("/checkout/initiate")
-async def initiate_checkout(request: Request):
+async def initiate_checkout(
+    request: Request, authorization: Optional[str] = Header(None)
+):
     data = await request.json()
     cart_id = data.get("cartId")
     shipping_address = data.get("shippingAddress")
     billing_address = data.get("billingAddress")
     customer_info = data.get("customerInfo")
 
-    # In a real app, we would get user ID from authentication
-    user_id = "anonymous"
+    user_id = get_request_user_id(authorization)
 
     # Validate cart exists
     if user_id not in DB["carts"] or DB["carts"][user_id]["id"] != cart_id:
@@ -547,11 +554,10 @@ async def initiate_checkout(request: Request):
             },
         )
 
-    # Create checkout session
     session_token = str(uuid4())
-    expires_at = datetime.now() + timedelta(hours=1)  # Session expires in 1 hour
+    verification_token = str(uuid4())
+    expires_at = datetime.now() + timedelta(hours=1)
 
-    # Calculate risk score
     risk_score = calculate_risk_score(
         customer_info, shipping_address, DB["carts"][user_id]
     )
@@ -559,16 +565,17 @@ async def initiate_checkout(request: Request):
     DB["checkout_sessions"][session_token] = {
         "userId": user_id,
         "cartId": cart_id,
+        "verificationToken": verification_token,
         "expiresAt": expires_at.isoformat(),
         "shippingAddress": shipping_address,
-        "billingAddress": billing_address
-        or shipping_address,  # Use shipping as billing if not provided
+        "billingAddress": billing_address or shipping_address,
         "customerInfo": customer_info,
         "riskAssessment": {"score": risk_score, "verificationRequired": True},
     }
 
     return {
         "sessionToken": session_token,
+        "verificationToken": verification_token,
         "expiresAt": expires_at.isoformat(),
         "cart": DB["carts"][user_id],
         "riskAssessment": DB["checkout_sessions"][session_token]["riskAssessment"],
@@ -576,10 +583,13 @@ async def initiate_checkout(request: Request):
 
 
 @api_router.post("/checkout/confirm")
-async def confirm_checkout(request: Request):
+async def confirm_checkout(
+    request: Request, authorization: Optional[str] = Header(None)
+):
     data = await request.json()
     session_token = data.get("sessionToken")
     payment_details = data.get("paymentDetails")
+    user_id = get_request_user_id(authorization)
 
     # Validate session
     if session_token not in DB["checkout_sessions"]:
@@ -589,6 +599,11 @@ async def confirm_checkout(request: Request):
         )
 
     session = DB["checkout_sessions"][session_token]
+    if session.get("userId") != user_id:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Invalid checkout session", "sessionToken": session_token},
+        )
 
     # Check if session is expired
     expires_at = datetime.fromisoformat(session["expiresAt"])
@@ -660,6 +675,12 @@ async def confirm_checkout(request: Request):
             },
         )
 
+    if verification.get("verificationToken") != session.get("verificationToken"):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Invalid verification token"},
+        )
+
     user_id = session["userId"]
 
     # Validate cart still exists
@@ -720,13 +741,17 @@ async def confirm_checkout(request: Request):
 
 
 @api_router.get("/orders/{order_id}")
-async def get_order_status(order_id: str):
-    if order_id not in DB["orders"]:
+async def get_order_status(
+    order_id: str, authorization: Optional[str] = Header(None)
+):
+    user_id = get_request_user_id(authorization)
+    order = DB["orders"].get(order_id)
+    if not order or order.get("userId") != user_id:
         raise HTTPException(
             status_code=404, detail={"error": "Order not found", "orderId": order_id}
         )
 
-    return {"order": DB["orders"][order_id]}
+    return {"order": order}
 
 
 # Add Swagger UI customization

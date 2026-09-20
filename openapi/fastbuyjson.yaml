@@ -419,7 +419,7 @@ components:
           additionalProperties: true
         sort:
           type: string
-          enum: [price_asc, price_desc, relevance, newest]
+          enum: [price_asc, price_desc, name_asc, name_desc, relevance, newest]
           default: relevance
         page:
           type: integer
@@ -581,6 +581,9 @@ components:
     CustomerInfo:
       type: object
       required: [email]
+      anyOf:
+        - required: [phone]
+        - required: [phoneNumber]
       properties:
         email:
           type: string
@@ -611,10 +614,13 @@ components:
           additionalProperties: true
     CheckoutInitiateResponse:
       type: object
-      required: [sessionToken, expiresAt]
+      required: [sessionToken, expiresAt, verificationToken]
       properties:
         sessionToken:
           type: string
+        verificationToken:
+          type: string
+          description: Token that must be echoed in checkout confirm
         expiresAt:
           type: string
           format: date-time

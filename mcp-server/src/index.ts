@@ -44,7 +44,7 @@ const SearchProductsSchema = z.object({
     minPrice: z.number().optional(),
     maxPrice: z.number().optional(),
   }).optional(),
-  sort: z.enum(['price_asc', 'price_desc', 'name_asc', 'name_desc']).optional(),
+  sort: z.enum(['price_asc', 'price_desc', 'name_asc', 'name_desc', 'relevance', 'newest']).optional(),
   page: z.number().min(1).default(1),
   pageSize: z.number().min(1).max(100).default(10),
 });
@@ -131,7 +131,7 @@ const tools: Tool[] = [
         },
         sort: {
           type: 'string',
-          enum: ['price_asc', 'price_desc', 'name_asc', 'name_desc'],
+          enum: ['price_asc', 'price_desc', 'name_asc', 'name_desc', 'relevance', 'newest'],
           description: 'Sort order for results',
         },
         page: {
