@@ -1,0 +1,13 @@
+{
+    "mcpServers": {
+        "fastbuyjson": {
+            "command": "node",
+            "args": [
+                "./dist/index.js"
+            ],
+            "env": {
+                "FASTBUYJSON_API_URL": "http://localhost:3000/api/fastbuyjson"
+            }
+        }
+    }
+}

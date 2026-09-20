@@ -1,0 +1,709 @@
+openapi: 3.0.3
+info:
+  title: FastBuyJSON
+  version: 1.0.0
+  description: |
+    JSON contract for LLM agents talking to e-commerce APIs.
+    All commerce endpoints live under `/api/fastbuyjson`.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: http://localhost:3000/api/fastbuyjson
+    description: Node.js demo server
+  - url: http://localhost:8000/api/fastbuyjson
+    description: Python demo server
+tags:
+  - name: Discovery
+  - name: Auth
+  - name: Products
+  - name: Cart
+  - name: Checkout
+  - name: Orders
+security:
+  - bearerAuth: []
+  - {}
+
+paths:
+  /detect:
+    get:
+      tags: [Discovery]
+      summary: Detect FastBuyJSON support
+      operationId: detectSupport
+      security: []
+      responses:
+        "200":
+          description: Implementation metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetectResponse"
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate with username and password
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: JWT tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh an access token
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: New access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/certificate:
+    post:
+      tags: [Auth]
+      summary: Verify a client certificate
+      operationId: verifyCertificate
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [certificate]
+              properties:
+                certificate:
+                  type: string
+      responses:
+        "200":
+          description: Certificate session
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session_id, expires_in]
+                properties:
+                  session_id:
+                    type: string
+                  expires_in:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /products/search:
+    post:
+      tags: [Products]
+      summary: Search the product catalog
+      operationId: searchProducts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductSearchRequest"
+            examples:
+              headphones:
+                $ref: "#/components/examples/SearchRequest"
+      responses:
+        "200":
+          description: Paginated product list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductSearchResponse"
+
+  /cart/add:
+    post:
+      tags: [Cart]
+      summary: Add a product to the cart
+      operationId: addToCart
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddToCartRequest"
+      responses:
+        "200":
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Idempotent request already processed
+
+  /cart:
+    get:
+      tags: [Cart]
+      summary: Get the current cart
+      operationId: getCart
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Cart snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /cart/{cartId}:
+    get:
+      tags: [Cart]
+      summary: Get a cart by id
+      operationId: getCartById
+      parameters:
+        - name: cartId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Cart snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /checkout/initiate:
+    post:
+      tags: [Checkout]
+      summary: Start a checkout session
+      operationId: initiateCheckout
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutInitiateRequest"
+      responses:
+        "200":
+          description: Checkout session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutInitiateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /checkout/confirm:
+    post:
+      tags: [Checkout]
+      summary: Confirm payment and create an order
+      operationId: confirmCheckout
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutConfirmRequest"
+      responses:
+        "200":
+          description: Confirmed order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutConfirmResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /orders/{orderId}:
+    get:
+      tags: [Orders]
+      summary: Get order status
+      operationId: getOrderStatus
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderStatusResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Prevents duplicate cart mutations when retried.
+    UserId:
+      name: X-User-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        default: anonymous
+      description: Demo-only cart owner. Production implementations should take identity from the access token.
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  examples:
+    SearchRequest:
+      value:
+        query: wireless headphones
+        filters:
+          brand: Acme
+          priceRange:
+            min: 50
+            max: 200
+        sort: price_asc
+        page: 1
+        pageSize: 10
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: number
+        currency:
+          type: string
+          example: USD
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          default: bearer
+        expires_in:
+          type: integer
+    RefreshResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+        expires_in:
+          type: integer
+    DetectResponse:
+      type: object
+      required: [standard, implementationVersion, supportedFeatures, endpoints]
+      properties:
+        standard:
+          type: string
+          example: FastBuyJSON 1.0.0
+        implementationVersion:
+          type: string
+        supportedFeatures:
+          type: array
+          items:
+            type: string
+        endpoints:
+          type: array
+          items:
+            type: string
+        authentication:
+          type: object
+          additionalProperties: true
+        checkout:
+          type: object
+          additionalProperties: true
+        merchantInfo:
+          type: object
+          properties:
+            name:
+              type: string
+            url:
+              type: string
+    ProductSearchRequest:
+      type: object
+      properties:
+        query:
+          type: string
+        filters:
+          type: object
+          additionalProperties: true
+        sort:
+          type: string
+          enum: [price_asc, price_desc, name_asc, name_desc, relevance, newest]
+          default: relevance
+        page:
+          type: integer
+          minimum: 1
+          default: 1
+        pageSize:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+        extensions:
+          type: object
+          additionalProperties: true
+    Product:
+      type: object
+      required: [id, name, price]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        brand:
+          type: string
+        description:
+          type: string
+        price:
+          $ref: "#/components/schemas/Money"
+        availability:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [in_stock, low_stock, out_of_stock, backorder, preorder]
+            quantity:
+              type: integer
+        categories:
+          type: array
+          items:
+            type: string
+        images:
+          type: array
+          items:
+            type: object
+            properties:
+              url:
+                type: string
+              alt:
+                type: string
+        variants:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    ProductSearchResponse:
+      type: object
+      required: [results, pagination]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        pagination:
+          type: object
+          required: [currentPage, pageSize, totalItems, totalPages]
+          properties:
+            currentPage:
+              type: integer
+            pageSize:
+              type: integer
+            totalItems:
+              type: integer
+            totalPages:
+              type: integer
+    AddToCartRequest:
+      type: object
+      required: [productId]
+      properties:
+        productId:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
+        options:
+          type: object
+          additionalProperties: true
+        extensions:
+          type: object
+          additionalProperties: true
+    CartItem:
+      type: object
+      required: [productId, quantity, price]
+      properties:
+        productId:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: integer
+        options:
+          type: object
+          additionalProperties: true
+        price:
+          $ref: "#/components/schemas/Money"
+        lineTotal:
+          $ref: "#/components/schemas/Money"
+    Cart:
+      type: object
+      required: [id, items]
+      properties:
+        id:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartItem"
+        totals:
+          type: object
+          properties:
+            subtotal:
+              type: number
+            tax:
+              type: number
+            shipping:
+              type: number
+            total:
+              type: number
+        created:
+          type: string
+          format: date-time
+        updated:
+          type: string
+          format: date-time
+    CartResponse:
+      type: object
+      required: [cart]
+      properties:
+        cart:
+          $ref: "#/components/schemas/Cart"
+    Address:
+      type: object
+      required: [line1, city, country, postalCode]
+      properties:
+        line1:
+          type: string
+        line2:
+          type: string
+        city:
+          type: string
+        region:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+          description: ISO 3166-1 alpha-2
+        postalCode:
+          type: string
+    CustomerInfo:
+      type: object
+      required: [email]
+      anyOf:
+        - required: [phone]
+        - required: [phoneNumber]
+      properties:
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        phoneNumber:
+          type: string
+          description: Alias accepted by demo servers
+        firstName:
+          type: string
+        lastName:
+          type: string
+    CheckoutInitiateRequest:
+      type: object
+      required: [cartId, shippingAddress, customerInfo]
+      properties:
+        cartId:
+          type: string
+        customerInfo:
+          $ref: "#/components/schemas/CustomerInfo"
+        shippingAddress:
+          $ref: "#/components/schemas/Address"
+        billingAddress:
+          $ref: "#/components/schemas/Address"
+        extensions:
+          type: object
+          additionalProperties: true
+    CheckoutInitiateResponse:
+      type: object
+      required: [sessionToken, expiresAt, verificationToken]
+      properties:
+        sessionToken:
+          type: string
+        verificationToken:
+          type: string
+          description: Token that must be echoed in checkout confirm
+        expiresAt:
+          type: string
+          format: date-time
+        cart:
+          $ref: "#/components/schemas/Cart"
+        riskAssessment:
+          type: object
+          properties:
+            score:
+              type: integer
+            verificationRequired:
+              type: boolean
+    CheckoutConfirmRequest:
+      type: object
+      required: [sessionToken, paymentDetails]
+      properties:
+        sessionToken:
+          type: string
+        paymentDetails:
+          type: object
+          required: [method, transactionVerification]
+          properties:
+            method:
+              type: string
+              enum: [credit_card, debit_card, paypal, bank_transfer, digital_wallet, apple_pay, google_pay]
+            transactionVerification:
+              type: object
+              required: [verificationMethod, verificationToken]
+              properties:
+                verificationMethod:
+                  type: string
+                  enum: [captcha, email_confirmation, sms_confirmation, payment_provider_token, oauth_token]
+                verificationToken:
+                  type: string
+                verificationTimestamp:
+                  type: string
+                  format: date-time
+            cardDetails:
+              type: object
+              properties:
+                lastFourDigits:
+                  type: string
+                brand:
+                  type: string
+            externalPaymentId:
+              type: string
+        extensions:
+          type: object
+          additionalProperties: true
+    Order:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [confirmed, processing, shipped, delivered, cancelled, refunded]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartItem"
+        totals:
+          type: object
+          additionalProperties: true
+        created:
+          type: string
+          format: date-time
+    CheckoutConfirmResponse:
+      type: object
+      required: [order, orderId]
+      properties:
+        order:
+          $ref: "#/components/schemas/Order"
+        orderId:
+          type: string
+        orderStatusUrl:
+          type: string
+        message:
+          type: string
+    OrderStatusResponse:
+      type: object
+      required: [order]
+      properties:
+        order:
+          $ref: "#/components/schemas/Order"
