@@ -1,0 +1,7 @@
+{
+    "productId": "acme-wh-001",
+    "quantity": 2,
+    "options": {
+        "color": "black"
+    }
+}

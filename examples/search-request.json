@@ -1,0 +1,13 @@
+{
+    "query": "wireless headphones",
+    "filters": {
+        "brand": "Acme",
+        "priceRange": {
+            "min": 50,
+            "max": 200
+        }
+    },
+    "sort": "price_asc",
+    "page": 1,
+    "pageSize": 10
+}

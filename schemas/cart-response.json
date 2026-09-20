@@ -1,0 +1,192 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Cart Response",
+    "description": "Full cart snapshot with totals and line items",
+    "type": "object",
+    "required": [
+        "cart"
+    ],
+    "properties": {
+        "cart": {
+            "type": "object",
+            "required": [
+                "id",
+                "items",
+                "totals"
+            ],
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "Cart identifier",
+                    "examples": [
+                        "c7f9b3e2"
+                    ]
+                },
+                "items": {
+                    "type": "array",
+                    "description": "Cart items",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "productId",
+                            "quantity",
+                            "price",
+                            "lineTotal"
+                        ],
+                        "properties": {
+                            "productId": {
+                                "type": "string",
+                                "description": "Product identifier",
+                                "examples": [
+                                    "acme-wh-001-black"
+                                ]
+                            },
+                            "name": {
+                                "type": "string",
+                                "description": "Product name",
+                                "examples": [
+                                    "ACME Wireless Headphones Pro"
+                                ]
+                            },
+                            "quantity": {
+                                "type": "integer",
+                                "description": "Quantity",
+                                "examples": [
+                                    2
+                                ]
+                            },
+                            "options": {
+                                "type": "object",
+                                "description": "Product options",
+                                "additionalProperties": true,
+                                "examples": [
+                                    {
+                                        "color": "black"
+                                    }
+                                ]
+                            },
+                            "price": {
+                                "type": "object",
+                                "required": [
+                                    "amount",
+                                    "currency"
+                                ],
+                                "properties": {
+                                    "amount": {
+                                        "type": "number",
+                                        "description": "Unit price",
+                                        "examples": [
+                                            199.99
+                                        ]
+                                    },
+                                    "currency": {
+                                        "type": "string",
+                                        "description": "Currency code",
+                                        "examples": [
+                                            "USD"
+                                        ]
+                                    }
+                                }
+                            },
+                            "lineTotal": {
+                                "type": "object",
+                                "required": [
+                                    "amount",
+                                    "currency"
+                                ],
+                                "properties": {
+                                    "amount": {
+                                        "type": "number",
+                                        "description": "Line total",
+                                        "examples": [
+                                            399.98
+                                        ]
+                                    },
+                                    "currency": {
+                                        "type": "string",
+                                        "description": "Currency code",
+                                        "examples": [
+                                            "USD"
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "totals": {
+                    "type": "object",
+                    "required": [
+                        "subtotal",
+                        "total"
+                    ],
+                    "properties": {
+                        "subtotal": {
+                            "type": "number",
+                            "description": "Cart subtotal",
+                            "examples": [
+                                399.98
+                            ]
+                        },
+                        "tax": {
+                            "type": "number",
+                            "description": "Tax amount",
+                            "examples": [
+                                39.99
+                            ]
+                        },
+                        "shipping": {
+                            "type": "number",
+                            "description": "Shipping cost",
+                            "examples": [
+                                0
+                            ]
+                        },
+                        "discount": {
+                            "type": "number",
+                            "description": "Discount amount",
+                            "examples": [
+                                0
+                            ]
+                        },
+                        "total": {
+                            "type": "number",
+                            "description": "Cart total",
+                            "examples": [
+                                439.97
+                            ]
+                        }
+                    }
+                },
+                "created": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Cart creation timestamp",
+                    "examples": [
+                        "2025-09-08T12:34:56.789Z"
+                    ]
+                },
+                "updated": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Cart last update timestamp",
+                    "examples": [
+                        "2025-09-08T12:45:22.123Z"
+                    ]
+                }
+            }
+        },
+        "message": {
+            "type": "string",
+            "description": "Optional message",
+            "examples": [
+                "Item added to cart successfully"
+            ]
+        },
+        "extensions": {
+            "type": "object",
+            "description": "Additional custom fields",
+            "additionalProperties": true
+        }
+    }
+}

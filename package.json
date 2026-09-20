@@ -1,0 +1,45 @@
+{
+  "name": "fast-buy-json",
+  "version": "1.0.0",
+  "description": "FastBuyJSON — a JSON-based standard for LLM agents talking to e-commerce APIs, plus a reference demo server and MCP implementation.",
+  "license": "MIT",
+  "type": "module",
+  "private": false,
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "start:python": "uvicorn server:app --app-dir src/python --reload --port 8000",
+    "validate:schemas": "python scripts/validate_schemas.py",
+    "mcp:install": "npm --prefix mcp-server install",
+    "mcp:build": "npm --prefix mcp-server run build",
+    "mcp:start": "npm --prefix mcp-server start"
+  },
+  "keywords": [
+    "fastbuyjson",
+    "e-commerce",
+    "llm",
+    "mcp",
+    "json-schema",
+    "openapi"
+  ],
+  "author": "Tomasz Miller",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/millers-dev/fast-buy-json.git"
+  },
+  "bugs": {
+    "url": "https://github.com/millers-dev/fast-buy-json/issues"
+  },
+  "homepage": "https://github.com/millers-dev/fast-buy-json#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "helmet": "^7.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^11.1.0"
+  }
+}

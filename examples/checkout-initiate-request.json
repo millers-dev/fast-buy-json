@@ -1,0 +1,21 @@
+{
+    "cartId": "c7f9b3e2",
+    "customerInfo": {
+        "email": "customer@example.com",
+        "phoneNumber": "+49 30 12345678",
+        "firstName": "John",
+        "lastName": "Doe"
+    },
+    "shippingAddress": {
+        "line1": "123 Main St",
+        "city": "Berlin",
+        "country": "DE",
+        "postalCode": "10115"
+    },
+    "billingAddress": {
+        "line1": "123 Main St",
+        "city": "Berlin",
+        "country": "DE",
+        "postalCode": "10115"
+    }
+}

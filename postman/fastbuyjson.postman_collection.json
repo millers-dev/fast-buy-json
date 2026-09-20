@@ -1,0 +1,570 @@
+{
+    "info": {
+        "_postman_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "name": "FastBuyJSON",
+        "description": "A collection for testing the FastBuyJSON API standard",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Authentication",
+            "item": [
+                {
+                    "name": "Login",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.access_token) {",
+                                    "    pm.environment.set(\"accessToken\", jsonData.access_token);",
+                                    "}",
+                                    "if (jsonData.refresh_token) {",
+                                    "    pm.environment.set(\"refreshToken\", jsonData.refresh_token);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"username\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/login",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "description": "Authenticate and obtain JWT token"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Refresh Token",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.access_token) {",
+                                    "    pm.environment.set(\"accessToken\", jsonData.access_token);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/refresh",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "refresh"
+                            ]
+                        },
+                        "description": "Refresh an expired JWT token"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Verify Certificate",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.session_id) {",
+                                    "    pm.environment.set(\"certificateSessionId\", jsonData.session_id);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"certificate\": \"-----BEGIN CERTIFICATE-----\\nMIIEBjCCAu6gAwIBAgIJALr9HwgrQ7GeMA0GCSqGSIb3DQEBCwUAMIGjMQswCQYD\\n...(certificate content)...\\n-----END CERTIFICATE-----\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/certificate",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "certificate"
+                            ]
+                        },
+                        "description": "Verify client certificate for mutual TLS authentication"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Products",
+            "item": [
+                {
+                    "name": "Search Products",
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{accessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"query\": \"wireless headphones\",\n  \"filters\": {\"brand\": \"Acme\"},\n  \"sort\": \"price_asc\",\n  \"page\": 1,\n  \"pageSize\": 10\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/products/search",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "products",
+                                "search"
+                            ]
+                        },
+                        "description": "Search for products in the catalog"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Cart",
+            "item": [
+                {
+                    "name": "Add to Cart",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.cart && jsonData.cart.id) {",
+                                    "    pm.environment.set(\"cartId\", jsonData.cart.id);",
+                                    "    console.log('Cart ID set from Add to Cart response:', jsonData.cart.id);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{accessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Idempotency-Key",
+                                "value": "{{$guid}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"productId\": \"acme-wh-001\",\n  \"quantity\": 2,\n  \"options\": {\"color\": \"black\"}\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/cart/add",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "cart",
+                                "add"
+                            ]
+                        },
+                        "description": "Add an item to the shopping cart"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Cart",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.cart && jsonData.cart.id) {",
+                                    "    pm.environment.set(\"cartId\", jsonData.cart.id);",
+                                    "    console.log('Cart ID set from Get Cart response:', jsonData.cart.id);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{accessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/cart",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "cart"
+                            ]
+                        },
+                        "description": "Get the current state of the shopping cart"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Cart by ID",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.cart && jsonData.cart.id) {",
+                                    "    pm.environment.set(\"cartId\", jsonData.cart.id);",
+                                    "    console.log('Cart ID set from Get Cart by ID response:', jsonData.cart.id);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{accessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/cart/{{cartId}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "cart",
+                                "{{cartId}}"
+                            ]
+                        },
+                        "description": "Get the shopping cart by its ID"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Checkout",
+            "item": [
+                {
+                    "name": "Initiate Checkout",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.sessionToken) {",
+                                    "    pm.environment.set(\"sessionToken\", jsonData.sessionToken);",
+                                    "    console.log('Session token set:', jsonData.sessionToken);",
+                                    "}",
+                                    "",
+                                    "// Also store expiresAt if available",
+                                    "if (jsonData.expiresAt) {",
+                                    "    pm.environment.set(\"sessionExpiresAt\", jsonData.expiresAt);",
+                                    "    console.log('Session expiration set:', jsonData.expiresAt);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{accessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"cartId\": \"{{cartId}}\",\n  \"customerInfo\": {\n    \"email\": \"customer@example.com\",\n    \"phone\": \"+49123456789\"\n  },\n  \"shippingAddress\": {\n    \"line1\": \"123 Main St\",\n    \"city\": \"Berlin\",\n    \"region\": \"Berlin\",\n    \"country\": \"DE\",\n    \"postalCode\": \"10115\"\n  },\n  \"billingAddress\": {\n    \"line1\": \"123 Main St\",\n    \"city\": \"Berlin\",\n    \"region\": \"Berlin\",\n    \"country\": \"DE\",\n    \"postalCode\": \"10115\"\n  }\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/checkout/initiate",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "checkout",
+                                "initiate"
+                            ]
+                        },
+                        "description": "Start the checkout process"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Confirm Checkout",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "// Store order ID from different possible response formats",
+                                    "if (jsonData.orderId) {",
+                                    "    // Direct orderId property in response",
+                                    "    pm.environment.set(\"orderId\", jsonData.orderId);",
+                                    "    console.log('Order ID set from direct property:', jsonData.orderId);",
+                                    "}",
+                                    "else if (jsonData.order && jsonData.order.id) {",
+                                    "    // Order ID from order object",
+                                    "    pm.environment.set(\"orderId\", jsonData.order.id);",
+                                    "    console.log('Order ID set from order object:', jsonData.order.id);",
+                                    "}",
+                                    "",
+                                    "// Store order status URL if available",
+                                    "if (jsonData.orderStatusUrl) {",
+                                    "    pm.environment.set(\"orderStatusUrl\", jsonData.orderStatusUrl);",
+                                    "    console.log('Order status URL set:', jsonData.orderStatusUrl);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{accessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"sessionToken\": \"{{sessionToken}}\",\n  \"paymentDetails\": {\n    \"method\": \"credit_card\",\n    \"cardDetails\": {\n      \"lastFourDigits\": \"4242\",\n      \"brand\": \"Visa\"\n    },\n    \"transactionVerification\": {\n      \"verificationMethod\": \"email_confirmation\",\n      \"verificationToken\": \"demo-token\"\n    }\n  }\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/checkout/confirm",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "checkout",
+                                "confirm"
+                            ]
+                        },
+                        "description": "Complete the checkout process"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Orders",
+            "item": [
+                {
+                    "name": "Get Order Status",
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{accessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/orders/{{orderId}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "orders",
+                                "{{orderId}}"
+                            ]
+                        },
+                        "description": "Get the status of an order"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "System",
+            "item": [
+                {
+                    "name": "Detect FastBuyJSON Support",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/detect",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "detect"
+                            ]
+                        },
+                        "description": "Detect if a website supports the FastBuyJSON standard"
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ],
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            {
+                "key": "token",
+                "value": "{{accessToken}}",
+                "type": "string"
+            }
+        ]
+    },
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Global pre-request script for FastBuyJSON API",
+                    "console.log('Running pre-request script for request: ' + pm.info.requestName);"
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Global test script for FastBuyJSON API",
+                    "console.log('Running test script for request: ' + pm.info.requestName);",
+                    "",
+                    "// Check if response is valid JSON",
+                    "try {",
+                    "    var jsonData = pm.response.json();",
+                    "    console.log('Response is valid JSON');",
+                    "} catch (e) {",
+                    "    console.log('Response is not valid JSON');",
+                    "}"
+                ]
+            }
+        }
+    ],
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://localhost:8000/api/fastbuyjson",
+            "type": "string"
+        }
+    ]
+}
