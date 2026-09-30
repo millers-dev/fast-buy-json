@@ -77,6 +77,6 @@
     }
   },
   "orderId": "00000000-0000-4000-8000-000000000005",
-  "orderStatusUrl": "/api/fastbuyjson/orders/a1b5db9e-c4c8-44ac-8510-bd456ac411db",
+  "orderStatusUrl": "/api/fastbuyjson/orders/c4daf433-bdaf-4ce3-978f-746844698e38",
   "message": "Order confirmed successfully"
 }
