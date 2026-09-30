@@ -910,7 +910,7 @@ paths:
                     score: 10
                     timestamp: '2024-01-15T12:00:00.000Z'
                 orderId: 00000000-0000-4000-8000-000000000005
-                orderStatusUrl: /api/fastbuyjson/orders/ee08958f-3030-43ac-ac71-29c2c57d49a6
+                orderStatusUrl: /api/fastbuyjson/orders/00000000-0000-4000-8000-000000000005
                 message: Order confirmed successfully
         '400':
           $ref: '#/components/responses/BadRequest'

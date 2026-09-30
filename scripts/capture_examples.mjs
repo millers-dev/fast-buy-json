@@ -45,6 +45,9 @@ function canonicalize(value, key = "") {
     return out;
   }
   if (typeof value === "string") {
+    if (key === "orderStatusUrl") {
+      return `/api/fastbuyjson/orders/${CANON.orderId}`;
+    }
     if (TOKEN_KEYS.has(key)) {
       if (key === "access_token") return CANON.accessToken;
       if (key === "refresh_token") return CANON.refreshToken;
