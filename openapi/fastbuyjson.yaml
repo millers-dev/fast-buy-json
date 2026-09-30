@@ -603,11 +603,10 @@ components:
       type: object
       properties:
         code:
-          type:
-          - string
-          - 'null'
+          type: string
           description: Promo code to apply; null or omitted clears the current discount
           example: SAVE10
+          nullable: true
     CartItem:
       description: Line item in a shopping cart
       type: object
