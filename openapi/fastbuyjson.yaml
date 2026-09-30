@@ -1,47 +1,56 @@
+# GENERATED — DO NOT EDIT
+# Regenerate with: python scripts/build_openapi.py
 openapi: 3.0.3
 info:
   title: FastBuyJSON
-  version: 0.1.0
-  description: |
-    JSON contract for LLM agents talking to e-commerce APIs.
+  version: 0.2.0
+  description: 'JSON contract for LLM agents talking to e-commerce APIs.
+
     All commerce endpoints live under `/api/fastbuyjson`.
+
+    '
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
 servers:
-  - url: http://localhost:3000/api/fastbuyjson
-    description: Node.js demo server
-  - url: http://localhost:8000/api/fastbuyjson
-    description: Python demo server
+- url: http://localhost:3000/api/fastbuyjson
+  description: Node.js demo server
+- url: http://localhost:8000/api/fastbuyjson
+  description: Python demo server
 tags:
-  - name: Discovery
-  - name: Auth
-  - name: Products
-  - name: Cart
-  - name: Checkout
-  - name: Orders
+- name: Discovery
+- name: Auth
+- name: Products
+- name: Cart
+- name: Checkout
+- name: Orders
 security:
-  - bearerAuth: []
-  - {}
-
+- bearerAuth: []
+- {}
 paths:
   /detect:
     get:
-      tags: [Discovery]
+      tags:
+      - Discovery
       summary: Detect FastBuyJSON support
       operationId: detectSupport
       security: []
       responses:
-        "200":
+        '200':
           description: Implementation metadata
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: public, max-age=300
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DetectResponse"
-
+                $ref: '#/components/schemas/DetectResponse'
   /auth/login:
     post:
-      tags: [Auth]
+      tags:
+      - Auth
       summary: Authenticate with username and password
       operationId: login
       security: []
@@ -50,22 +59,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LoginRequest"
+              $ref: '#/components/schemas/LoginRequest'
       responses:
-        "200":
+        '200':
           description: JWT tokens
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TokenResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /auth/refresh:
     post:
-      tags: [Auth]
+      tags:
+      - Auth
       summary: Refresh an access token
       operationId: refreshToken
       security: []
@@ -74,25 +88,26 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [refresh_token]
-              properties:
-                refresh_token:
-                  type: string
+              $ref: '#/components/schemas/RefreshRequest'
       responses:
-        "200":
+        '200':
           description: New access token
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RefreshResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-
+                $ref: '#/components/schemas/RefreshResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /auth/certificate:
     post:
-      tags: [Auth]
-      summary: Verify a client certificate
+      tags:
+      - Auth
+      summary: Verify a client certificate (experimental)
       operationId: verifyCertificate
       security: []
       requestBody:
@@ -100,30 +115,25 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [certificate]
-              properties:
-                certificate:
-                  type: string
+              $ref: '#/components/schemas/CertificateRequest'
       responses:
-        "200":
-          description: Certificate session
+        '200':
+          description: Certificate session (reserved for future mTLS flows)
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
           content:
             application/json:
               schema:
-                type: object
-                required: [session_id, expires_in]
-                properties:
-                  session_id:
-                    type: string
-                  expires_in:
-                    type: integer
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-
+                $ref: '#/components/schemas/CertificateResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /products/search:
     post:
-      tags: [Products]
+      tags:
+      - Products
       summary: Search the product catalog
       operationId: searchProducts
       requestBody:
@@ -131,152 +141,196 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ProductSearchRequest"
+              $ref: '#/components/schemas/ProductSearchRequest'
             examples:
               headphones:
-                $ref: "#/components/examples/SearchRequest"
+                $ref: '#/components/examples/SearchRequest'
       responses:
-        "200":
+        '200':
           description: Paginated product list
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProductSearchResponse"
-
+                $ref: '#/components/schemas/ProductSearchResponse'
   /cart/add:
     post:
-      tags: [Cart]
+      tags:
+      - Cart
       summary: Add a product to the cart
       operationId: addToCart
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
-        - $ref: "#/components/parameters/UserId"
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AddToCartRequest"
+              $ref: '#/components/schemas/AddToCartRequest'
       responses:
-        "200":
+        '200':
           description: Updated cart
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
+            Idempotency-Replayed:
+              schema:
+                type: boolean
+              description: true when the response is replayed from a prior successful request with the same key
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CartResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          description: Idempotent request already processed
-
+                $ref: '#/components/schemas/CartResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
   /cart:
     get:
-      tags: [Cart]
+      tags:
+      - Cart
       summary: Get the current cart
       operationId: getCart
-      parameters:
-        - $ref: "#/components/parameters/UserId"
       responses:
-        "200":
+        '200':
           description: Cart snapshot
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CartResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
+                $ref: '#/components/schemas/CartResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /cart/{cartId}:
     get:
-      tags: [Cart]
+      tags:
+      - Cart
       summary: Get a cart by id
       operationId: getCartById
       parameters:
-        - name: cartId
-          in: path
-          required: true
-          schema:
-            type: string
-        - $ref: "#/components/parameters/UserId"
+      - name: cartId
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: Cart snapshot
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CartResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
+                $ref: '#/components/schemas/CartResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /checkout/initiate:
     post:
-      tags: [Checkout]
+      tags:
+      - Checkout
       summary: Start a checkout session
       operationId: initiateCheckout
       parameters:
-        - $ref: "#/components/parameters/UserId"
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CheckoutInitiateRequest"
+              $ref: '#/components/schemas/CheckoutInitiateRequest'
       responses:
-        "200":
+        '200':
           description: Checkout session
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
+            Idempotency-Replayed:
+              schema:
+                type: boolean
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CheckoutInitiateResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
+                $ref: '#/components/schemas/CheckoutInitiateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
   /checkout/confirm:
     post:
-      tags: [Checkout]
+      tags:
+      - Checkout
       summary: Confirm payment and create an order
       operationId: confirmCheckout
       parameters:
-        - $ref: "#/components/parameters/UserId"
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CheckoutConfirmRequest"
+              $ref: '#/components/schemas/CheckoutConfirmRequest'
       responses:
-        "200":
+        '200':
           description: Confirmed order
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
+            Idempotency-Replayed:
+              schema:
+                type: boolean
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CheckoutConfirmResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-
+                $ref: '#/components/schemas/CheckoutConfirmResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
   /orders/{orderId}:
     get:
-      tags: [Orders]
+      tags:
+      - Orders
       summary: Get order status
       operationId: getOrderStatus
       parameters:
-        - name: orderId
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: Order snapshot
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OrderStatusResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
+                $ref: '#/components/schemas/OrderStatusResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   securitySchemes:
     bearerAuth:
@@ -290,34 +344,38 @@ components:
       required: false
       schema:
         type: string
-      description: Prevents duplicate cart mutations when retried.
-    UserId:
-      name: X-User-Id
-      in: header
-      required: false
-      schema:
-        type: string
-        default: anonymous
-      description: Demo-only cart owner. Production implementations should take identity from the access token.
+        format: uuid
+      description: Optional idempotency token for mutating POST requests. When present, servers must honor replays for 24h.
   responses:
     BadRequest:
       description: Invalid request
       content:
-        application/json:
+        application/problem+json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
     Unauthorized:
       description: Authentication failed
-      content:
-        application/json:
+      headers:
+        WWW-Authenticate:
           schema:
-            $ref: "#/components/schemas/Error"
+            type: string
+          description: Bearer challenge when an invalid or malformed token was supplied
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
     NotFound:
       description: Resource not found
       content:
-        application/json:
+        application/problem+json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
+    IdempotencyConflict:
+      description: Same idempotency key was reused with a different request payload
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
   examples:
     SearchRequest:
       value:
@@ -331,379 +389,1601 @@ components:
         page: 1
         pageSize: 10
   schemas:
-    Error:
+    AddToCartRequest:
+      description: Payload for adding an item to the cart
       type: object
+      required:
+      - productId
       properties:
-        error:
+        productId:
           type: string
+          description: Product identifier
+          example: acme-wh-001
+        quantity:
+          type: integer
+          description: Quantity to add
+          minimum: 1
+          default: 1
+          example: 2
+        options:
+          type: object
+          description: Product options (e.g., color, size)
+          additionalProperties: true
+          example:
+            color: black
+        extensions:
+          type: object
+          description: Additional custom fields
+          additionalProperties: true
+    Address:
+      description: Postal address for shipping or billing
+      type: object
+      required:
+      - line1
+      - city
+      - country
+      - postalCode
+      properties:
+        line1:
+          type: string
+          description: Address line 1
+          example: 123 Main St
+        line2:
+          type: string
+          description: Address line 2
+          example: Apt 4B
+        city:
+          type: string
+          description: City
+          example: Berlin
+        region:
+          type: string
+          description: State/Province/Region
+          example: Berlin
+        state:
+          type: string
+          description: State or province (alias)
+          example: Berlin
+        country:
+          type: string
+          description: Country code (ISO 3166-1 alpha-2)
+          example: DE
+        postalCode:
+          type: string
+          description: Postal/ZIP code
+          example: '10115'
+    CartItem:
+      description: Line item in a shopping cart
+      type: object
+      required:
+      - productId
+      - quantity
+      - price
+      properties:
+        productId:
+          type: string
+          description: Product identifier
+          example: acme-wh-001-black
+        name:
+          type: string
+          description: Product name
+          example: ACME Wireless Headphones Pro
+        quantity:
+          type: integer
+          description: Quantity
+          example: 2
+        options:
+          type: object
+          description: Product options
+          additionalProperties: true
+          example:
+            color: black
+        price:
+          type: object
+          required:
+          - amount
+          - currency
+          properties:
+            amount:
+              type: number
+              description: Unit price
+              example: 199.99
+            currency:
+              type: string
+              description: Currency code (ISO 4217)
+              example: USD
+        lineTotal:
+          type: object
+          required:
+          - amount
+          - currency
+          properties:
+            amount:
+              type: number
+              description: Line total
+              example: 399.98
+            currency:
+              type: string
+              description: Currency code (ISO 4217)
+              example: USD
+    CartResponse:
+      description: Full cart snapshot with totals and line items
+      type: object
+      required:
+      - cart
+      properties:
+        cart:
+          type: object
+          required:
+          - id
+          - items
+          - totals
+          properties:
+            id:
+              type: string
+              description: Cart identifier
+              example: c7f9b3e2
+            items:
+              type: array
+              description: Cart items
+              items:
+                type: object
+                required:
+                - productId
+                - quantity
+                - price
+                - lineTotal
+                properties:
+                  productId:
+                    type: string
+                    description: Product identifier
+                    example: acme-wh-001-black
+                  name:
+                    type: string
+                    description: Product name
+                    example: ACME Wireless Headphones Pro
+                  quantity:
+                    type: integer
+                    description: Quantity
+                    example: 2
+                  options:
+                    type: object
+                    description: Product options
+                    additionalProperties: true
+                    example:
+                      color: black
+                  price:
+                    type: object
+                    required:
+                    - amount
+                    - currency
+                    properties:
+                      amount:
+                        type: number
+                        description: Unit price
+                        example: 199.99
+                      currency:
+                        type: string
+                        description: Currency code
+                        example: USD
+                  lineTotal:
+                    type: object
+                    required:
+                    - amount
+                    - currency
+                    properties:
+                      amount:
+                        type: number
+                        description: Line total
+                        example: 399.98
+                      currency:
+                        type: string
+                        description: Currency code
+                        example: USD
+            totals:
+              type: object
+              required:
+              - subtotal
+              - total
+              properties:
+                subtotal:
+                  type: number
+                  description: Cart subtotal
+                  example: 399.98
+                tax:
+                  type: number
+                  description: Tax amount
+                  example: 39.99
+                shipping:
+                  type: number
+                  description: Shipping cost
+                  example: 0
+                discount:
+                  type: number
+                  description: Discount amount
+                  example: 0
+                total:
+                  type: number
+                  description: Cart total
+                  example: 439.97
+            created:
+              type: string
+              format: date-time
+              description: Cart creation timestamp
+              example: '2025-09-08T12:34:56.789Z'
+            updated:
+              type: string
+              format: date-time
+              description: Cart last update timestamp
+              example: '2025-09-08T12:45:22.123Z'
         message:
           type: string
-    Money:
-      type: object
-      required: [amount, currency]
-      properties:
-        amount:
-          type: number
-        currency:
-          type: string
-          example: USD
-    LoginRequest:
-      type: object
-      required: [username, password]
-      properties:
-        username:
-          type: string
-        password:
-          type: string
-          format: password
-    TokenResponse:
-      type: object
-      required: [access_token, token_type, expires_in]
-      properties:
-        access_token:
-          type: string
-        refresh_token:
-          type: string
-        token_type:
-          type: string
-          default: bearer
-        expires_in:
-          type: integer
-    RefreshResponse:
-      type: object
-      required: [access_token, token_type, expires_in]
-      properties:
-        access_token:
-          type: string
-        token_type:
-          type: string
-        expires_in:
-          type: integer
-    DetectResponse:
-      type: object
-      required: [standard, implementationVersion, supportedFeatures, endpoints]
-      properties:
-        standard:
-          type: string
-          example: FastBuyJSON 0.1.0
-        implementationVersion:
-          type: string
-        supportedFeatures:
-          type: array
-          items:
-            type: string
-        endpoints:
-          type: array
-          items:
-            type: string
-        authentication:
-          type: object
-          additionalProperties: true
-        checkout:
-          type: object
-          additionalProperties: true
-        merchantInfo:
-          type: object
-          properties:
-            name:
-              type: string
-            url:
-              type: string
-    ProductSearchRequest:
-      type: object
-      properties:
-        query:
-          type: string
-        filters:
-          type: object
-          additionalProperties: true
-        sort:
-          type: string
-          enum: [price_asc, price_desc, name_asc, name_desc, relevance, newest]
-          default: relevance
-        page:
-          type: integer
-          minimum: 1
-          default: 1
-        pageSize:
-          type: integer
-          minimum: 1
-          maximum: 100
-          default: 10
+          description: Optional message
+          example: Item added to cart successfully
         extensions:
           type: object
+          description: Additional custom fields
           additionalProperties: true
-    Product:
-      type: object
-      required: [id, name, price]
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        brand:
-          type: string
-        description:
-          type: string
-        price:
-          $ref: "#/components/schemas/Money"
-        availability:
-          type: object
-          properties:
-            status:
-              type: string
-              enum: [in_stock, low_stock, out_of_stock, backorder, preorder]
-            quantity:
-              type: integer
-        categories:
-          type: array
-          items:
-            type: string
-        images:
-          type: array
-          items:
-            type: object
-            properties:
-              url:
-                type: string
-              alt:
-                type: string
-        variants:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-    ProductSearchResponse:
-      type: object
-      required: [results, pagination]
-      properties:
-        results:
-          type: array
-          items:
-            $ref: "#/components/schemas/Product"
-        pagination:
-          type: object
-          required: [currentPage, pageSize, totalItems, totalPages]
-          properties:
-            currentPage:
-              type: integer
-            pageSize:
-              type: integer
-            totalItems:
-              type: integer
-            totalPages:
-              type: integer
-    AddToCartRequest:
-      type: object
-      required: [productId]
-      properties:
-        productId:
-          type: string
-        quantity:
-          type: integer
-          minimum: 1
-          default: 1
-        options:
-          type: object
-          additionalProperties: true
-        extensions:
-          type: object
-          additionalProperties: true
-    CartItem:
-      type: object
-      required: [productId, quantity, price]
-      properties:
-        productId:
-          type: string
-        name:
-          type: string
-        quantity:
-          type: integer
-        options:
-          type: object
-          additionalProperties: true
-        price:
-          $ref: "#/components/schemas/Money"
-        lineTotal:
-          $ref: "#/components/schemas/Money"
     Cart:
+      description: Shopping cart with line items and totals
       type: object
-      required: [id, items]
+      required:
+      - id
+      - items
       properties:
         id:
           type: string
+          description: Cart identifier
+          example: c7f9b3e2
         items:
           type: array
+          description: Cart items
           items:
-            $ref: "#/components/schemas/CartItem"
+            type: object
+            required:
+            - productId
+            - quantity
+            - price
+            properties:
+              productId:
+                type: string
+                description: Product identifier
+                example: acme-wh-001-black
+              name:
+                type: string
+                description: Product name
+                example: ACME Wireless Headphones Pro
+              quantity:
+                type: integer
+                description: Quantity
+                example: 2
+              options:
+                type: object
+                description: Product options
+                additionalProperties: true
+              price:
+                type: object
+                required:
+                - amount
+                - currency
+                properties:
+                  amount:
+                    type: number
+                    example: 199.99
+                  currency:
+                    type: string
+                    example: USD
+              lineTotal:
+                type: object
+                required:
+                - amount
+                - currency
+                properties:
+                  amount:
+                    type: number
+                    example: 399.98
+                  currency:
+                    type: string
+                    example: USD
         totals:
           type: object
           properties:
             subtotal:
               type: number
+              example: 399.98
             tax:
               type: number
+              example: 39.99
             shipping:
               type: number
+              example: 0
             total:
               type: number
+              example: 439.97
         created:
           type: string
           format: date-time
+          description: Cart creation timestamp
+          example: '2025-09-08T12:34:56.789Z'
         updated:
           type: string
           format: date-time
-    CartResponse:
+          description: Cart last update timestamp
+          example: '2025-09-08T12:45:22.123Z'
+    CertificateRequest:
+      description: Client certificate in PEM format for certificate authentication
       type: object
-      required: [cart]
+      required:
+      - certificate
       properties:
-        cart:
-          $ref: "#/components/schemas/Cart"
-    Address:
+        certificate:
+          type: string
+          description: X.509 client certificate in PEM encoding
+          example: '-----BEGIN CERTIFICATE-----
+
+            MIIC...
+
+            -----END CERTIFICATE-----'
+    CertificateResponse:
+      description: Certificate verification session
       type: object
-      required: [line1, city, country, postalCode]
+      required:
+      - session_id
+      - expires_in
       properties:
-        line1:
+        session_id:
           type: string
-        line2:
-          type: string
-        city:
-          type: string
-        region:
-          type: string
-        state:
-          type: string
-        country:
-          type: string
-          description: ISO 3166-1 alpha-2
-        postalCode:
-          type: string
-    CustomerInfo:
+          description: Certificate session identifier
+          example: cert-sess-a1b2c3d4
+        expires_in:
+          type: integer
+          description: Session lifetime in seconds
+          example: 3600
+    CheckoutConfirmResponse:
+      description: Order created after successful payment confirmation
       type: object
-      required: [email]
-      anyOf:
-        - required: [phone]
-        - required: [phoneNumber]
+      required:
+      - order
+      - orderId
       properties:
-        email:
-          type: string
-          format: email
-        phone:
-          type: string
-        phoneNumber:
-          type: string
-          description: Alias accepted by demo servers
-        firstName:
-          type: string
-        lastName:
-          type: string
-    CheckoutInitiateRequest:
-      type: object
-      required: [cartId, shippingAddress, customerInfo]
-      properties:
-        cartId:
-          type: string
-        customerInfo:
-          $ref: "#/components/schemas/CustomerInfo"
-        shippingAddress:
-          $ref: "#/components/schemas/Address"
-        billingAddress:
-          $ref: "#/components/schemas/Address"
-        extensions:
+        order:
           type: object
-          additionalProperties: true
-    CheckoutInitiateResponse:
+          description: Confirmed order
+          required:
+          - id
+          - status
+          properties:
+            id:
+              type: string
+              description: Order identifier
+              example: ord-2025-09-08-123456
+            status:
+              type: string
+              enum:
+              - confirmed
+              - processing
+              - shipped
+              - delivered
+              - cancelled
+              - refunded
+              example: confirmed
+            items:
+              type: array
+              items:
+                type: object
+                required:
+                - productId
+                - quantity
+                - price
+                properties:
+                  productId:
+                    type: string
+                    example: acme-wh-001-black
+                  name:
+                    type: string
+                    example: ACME Wireless Headphones Pro
+                  quantity:
+                    type: integer
+                    example: 2
+                  options:
+                    type: object
+                    additionalProperties: true
+                  price:
+                    type: object
+                    required:
+                    - amount
+                    - currency
+                    properties:
+                      amount:
+                        type: number
+                        example: 199.99
+                      currency:
+                        type: string
+                        example: USD
+                  lineTotal:
+                    type: object
+                    required:
+                    - amount
+                    - currency
+                    properties:
+                      amount:
+                        type: number
+                        example: 399.98
+                      currency:
+                        type: string
+                        example: USD
+            totals:
+              type: object
+              additionalProperties: true
+              example:
+                subtotal: 399.98
+                tax: 39.99
+                shipping: 0
+                total: 439.97
+            created:
+              type: string
+              format: date-time
+              example: '2025-09-08T12:34:56.789Z'
+        orderId:
+          type: string
+          description: Order identifier (duplicate of order.id)
+          example: ord-2025-09-08-123456
+        orderStatusUrl:
+          type: string
+          format: uri
+          description: URL to poll order status
+          example: https://example.com/api/fastbuyjson/orders/ord-2025-09-08-123456
+        message:
+          type: string
+          description: Optional confirmation message
+          example: Order confirmed successfully
+    CheckoutConfirmRequest:
+      description: Confirms payment and creates the order
       type: object
-      required: [sessionToken, expiresAt, verificationToken]
+      required:
+      - sessionToken
+      - paymentDetails
       properties:
         sessionToken:
           type: string
+          description: Checkout session token
+          example: f47ac10b-58cc-4372-a567-0e02b2c3d479
+        paymentDetails:
+          type: object
+          required:
+          - method
+          - transactionVerification
+          properties:
+            method:
+              type: string
+              description: Payment method
+              enum:
+              - credit_card
+              - debit_card
+              - paypal
+              - bank_transfer
+              - digital_wallet
+              - apple_pay
+              - google_pay
+              example: credit_card
+            transactionVerification:
+              type: object
+              description: Verification information to prevent fraudulent orders
+              required:
+              - verificationMethod
+              - verificationToken
+              properties:
+                verificationMethod:
+                  type: string
+                  description: Method used to verify the transaction
+                  enum:
+                  - captcha
+                  - email_confirmation
+                  - sms_confirmation
+                  - payment_provider_token
+                  - oauth_token
+                  example: captcha
+                verificationToken:
+                  type: string
+                  description: Token proving the verification was completed
+                  example: 03AGdBq26EGx6NbXEWWVFUowyUEAGK...
+                verificationTimestamp:
+                  type: string
+                  format: date-time
+                  description: When the verification was completed (ISO 8601 format)
+            cardDetails:
+              type: object
+              description: Credit card details (never stored)
+              properties:
+                lastFourDigits:
+                  type: string
+                  description: Last four digits of card number
+                  example: '4242'
+                brand:
+                  type: string
+                  description: Card brand
+                  example: Visa
+            externalPaymentId:
+              type: string
+              description: External payment processor ID
+              example: py_1JKWqZCZ6qsJgndJhNR3U5QD
+        extensions:
+          type: object
+          description: Additional custom fields
+          additionalProperties: true
+    CheckoutInitiateResponse:
+      description: Checkout session tokens and optional cart snapshot
+      type: object
+      required:
+      - sessionToken
+      - expiresAt
+      - verificationToken
+      properties:
+        sessionToken:
+          type: string
+          description: Checkout session token
+          example: f47ac10b-58cc-4372-a567-0e02b2c3d479
         verificationToken:
           type: string
           description: Token that must be echoed in checkout confirm
+          example: vtok_8f3c2b1a0d9e8f7g6h5i4j3k2l1m0n9o
         expiresAt:
           type: string
           format: date-time
+          description: Session expiration time
+          example: '2025-09-08T13:34:56.789Z'
         cart:
-          $ref: "#/components/schemas/Cart"
+          type: object
+          description: Cart snapshot for the checkout session
+          required:
+          - id
+          - items
+          properties:
+            id:
+              type: string
+              example: c7f9b3e2
+            items:
+              type: array
+              items:
+                type: object
+                required:
+                - productId
+                - quantity
+                - price
+                properties:
+                  productId:
+                    type: string
+                    example: acme-wh-001-black
+                  name:
+                    type: string
+                    example: ACME Wireless Headphones Pro
+                  quantity:
+                    type: integer
+                    example: 2
+                  options:
+                    type: object
+                    additionalProperties: true
+                  price:
+                    type: object
+                    required:
+                    - amount
+                    - currency
+                    properties:
+                      amount:
+                        type: number
+                        example: 199.99
+                      currency:
+                        type: string
+                        example: USD
+                  lineTotal:
+                    type: object
+                    required:
+                    - amount
+                    - currency
+                    properties:
+                      amount:
+                        type: number
+                        example: 399.98
+                      currency:
+                        type: string
+                        example: USD
+            totals:
+              type: object
+              properties:
+                subtotal:
+                  type: number
+                  example: 399.98
+                tax:
+                  type: number
+                  example: 39.99
+                shipping:
+                  type: number
+                  example: 0
+                total:
+                  type: number
+                  example: 439.97
+            created:
+              type: string
+              format: date-time
+              example: '2025-09-08T12:34:56.789Z'
+            updated:
+              type: string
+              format: date-time
+              example: '2025-09-08T12:45:22.123Z'
         riskAssessment:
           type: object
           properties:
             score:
               type: integer
+              description: Risk score
+              example: 12
             verificationRequired:
               type: boolean
-    CheckoutConfirmRequest:
+              description: Whether additional verification is required
+              example: false
+    CheckoutInitiateRequest:
+      description: Starts a checkout session with addresses and cart reference
       type: object
-      required: [sessionToken, paymentDetails]
+      required:
+      - cartId
+      - shippingAddress
+      - customerInfo
       properties:
-        sessionToken:
+        cartId:
           type: string
-        paymentDetails:
+          description: Cart identifier
+          example: c7f9b3e2
+        customerInfo:
           type: object
-          required: [method, transactionVerification]
+          description: Customer contact information for order confirmation and communication
+          required:
+          - email
+          anyOf:
+          - required:
+            - phone
+          - required:
+            - phoneNumber
           properties:
-            method:
+            email:
               type: string
-              enum: [credit_card, debit_card, paypal, bank_transfer, digital_wallet, apple_pay, google_pay]
-            transactionVerification:
-              type: object
-              required: [verificationMethod, verificationToken]
-              properties:
-                verificationMethod:
-                  type: string
-                  enum: [captcha, email_confirmation, sms_confirmation, payment_provider_token, oauth_token]
-                verificationToken:
-                  type: string
-                verificationTimestamp:
-                  type: string
-                  format: date-time
-            cardDetails:
-              type: object
-              properties:
-                lastFourDigits:
-                  type: string
-                brand:
-                  type: string
-            externalPaymentId:
+              format: email
+              description: Customer email address for order confirmation and communication
+              example: customer@example.com
+            phone:
               type: string
+              description: Customer phone number for shipping updates and verification
+              pattern: ^\+?[0-9\s\-\(\)]{8,20}$
+              example: +49 30 12345678
+            phoneNumber:
+              type: string
+              description: Legacy alias for phone
+              pattern: ^\+?[0-9\s\-\(\)]{8,20}$
+              example: +49 30 12345678
+            firstName:
+              type: string
+              description: Customer first name
+            lastName:
+              type: string
+              description: Customer last name
+        shippingAddress:
+          type: object
+          required:
+          - line1
+          - city
+          - country
+          - postalCode
+          properties:
+            line1:
+              type: string
+              description: Address line 1
+              example: 123 Main St
+            line2:
+              type: string
+              description: Address line 2
+              example: Apt 4B
+            city:
+              type: string
+              description: City
+              example: Berlin
+            region:
+              type: string
+              description: State/Province/Region
+              example: Berlin
+            country:
+              type: string
+              description: Country code (ISO 3166-1 alpha-2)
+              example: DE
+            postalCode:
+              type: string
+              description: Postal/ZIP code
+              example: '10115'
+        billingAddress:
+          type: object
+          required:
+          - line1
+          - city
+          - country
+          - postalCode
+          properties:
+            line1:
+              type: string
+              description: Address line 1
+              example: 123 Main St
+            line2:
+              type: string
+              description: Address line 2
+              example: Apt 4B
+            city:
+              type: string
+              description: City
+              example: Berlin
+            region:
+              type: string
+              description: State/Province/Region
+              example: Berlin
+            country:
+              type: string
+              description: Country code (ISO 3166-1 alpha-2)
+              example: DE
+            postalCode:
+              type: string
+              description: Postal/ZIP code
+              example: '10115'
         extensions:
           type: object
+          description: Additional custom fields
+          additionalProperties: true
+    CustomerInfo:
+      description: Customer contact information for checkout
+      type: object
+      required:
+      - email
+      anyOf:
+      - required:
+        - phone
+      - required:
+        - phoneNumber
+      properties:
+        email:
+          type: string
+          format: email
+          description: Customer email address
+          example: customer@example.com
+        phone:
+          type: string
+          description: Customer phone number
+          example: +49 30 12345678
+        phoneNumber:
+          type: string
+          description: Alias accepted by demo servers
+          example: +49 30 12345678
+        firstName:
+          type: string
+          description: Customer first name
+          example: Alex
+        lastName:
+          type: string
+          description: Customer last name
+          example: Example
+    DetectResponse:
+      description: FastBuyJSON capability discovery metadata for agents
+      type: object
+      required:
+      - standard
+      - specVersion
+      - implementationVersion
+      - supportedFeatures
+      - endpoints
+      properties:
+        standard:
+          type: string
+          description: Standard identifier
+          example: FastBuyJSON
+        specVersion:
+          type: string
+          description: FastBuyJSON specification version
+          example: 0.2.0
+        implementationVersion:
+          type: string
+          description: Server implementation version
+          example: 0.2.0
+        supportedFeatures:
+          type: array
+          description: Supported FastBuyJSON features
+          items:
+            type: string
+          example:
+          - idempotency
+          - pagination
+          - schema_validation
+          - authentication
+          - anonymous_cart
+          - guest_checkout
+        endpoints:
+          type: array
+          description: Supported API endpoint groups
+          items:
+            type: string
+          example:
+          - products
+          - cart
+          - checkout
+          - orders
+          - auth
+        authentication:
+          type: object
+          description: Authentication capabilities
+          additionalProperties: true
+          example:
+            methods:
+            - jwt
+            - certificate
+            - anonymous
+            endpoints:
+            - /auth/login
+            - /auth/refresh
+            - /auth/certificate
+        checkout:
+          type: object
+          description: Checkout capabilities
+          additionalProperties: true
+          example:
+            methods:
+            - registered_user
+            - guest_checkout
+            verification:
+            - email
+            - phone
+            - credit_card
+        merchantInfo:
+          type: object
+          description: Merchant metadata
+          properties:
+            name:
+              type: string
+              example: FastBuyJSON Demo Store
+            url:
+              type: string
+              format: uri
+              example: https://example.com
+    Error:
+      description: RFC 9457 problem details with FastBuyJSON error code
+      type: object
+      required:
+      - type
+      - title
+      - status
+      - code
+      properties:
+        type:
+          type: string
+          format: uri
+          description: URI reference identifying the problem type
+          example: https://fastbuyjson.org/problems/validation-error
+        title:
+          type: string
+          description: Short, human-readable summary of the problem
+          example: Validation failed
+        status:
+          type: integer
+          description: HTTP status code
+          example: 400
+        code:
+          type: string
+          description: Machine-readable error code
+          example: INVALID_REQUEST
+        detail:
+          type: string
+          description: Human-readable explanation specific to this occurrence
+          example: The cartId field is required.
+        instance:
+          type: string
+          format: uri
+          description: URI reference identifying this specific occurrence
+          example: https://example.com/api/fastbuyjson/checkout/initiate
+        errors:
+          type: array
+          description: Field-level validation errors
+          items:
+            type: object
+            required:
+            - field
+            - message
+            properties:
+              field:
+                type: string
+                description: JSON pointer or field name
+                example: cartId
+              message:
+                type: string
+                description: Error message for the field
+                example: Field is required
+    LoginRequest:
+      description: Username and password credentials for JWT authentication
+      type: object
+      required:
+      - username
+      - password
+      properties:
+        username:
+          type: string
+          description: Account username
+          example: demo
+        password:
+          type: string
+          format: password
+          description: Account password
+          example: demo123
+    Money:
+      description: Monetary amount with ISO 4217 currency code
+      type: object
+      required:
+      - amount
+      - currency
+      properties:
+        amount:
+          type: number
+          description: Price amount
+          example: 199.99
+        currency:
+          type: string
+          description: Currency code (ISO 4217)
+          example: USD
+    OrderStatusResponse:
+      description: Returns order state and tracking information
+      type: object
+      required:
+      - order
+      properties:
+        order:
+          type: object
+          required:
+          - id
+          - status
+          - items
+          - totals
+          - created
+          properties:
+            id:
+              type: string
+              description: Order identifier
+              example: ord-2025-09-08-123456
+            status:
+              type: string
+              description: Order status
+              enum:
+              - confirmed
+              - processing
+              - shipped
+              - delivered
+              - cancelled
+              - refunded
+              example: confirmed
+            items:
+              type: array
+              description: Order items
+              items:
+                type: object
+                required:
+                - productId
+                - quantity
+                - price
+                - lineTotal
+                properties:
+                  productId:
+                    type: string
+                    description: Product identifier
+                    example: acme-wh-001-black
+                  name:
+                    type: string
+                    description: Product name
+                    example: ACME Wireless Headphones Pro
+                  quantity:
+                    type: integer
+                    description: Quantity
+                    example: 2
+                  options:
+                    type: object
+                    description: Product options
+                    additionalProperties: true
+                    example:
+                      color: black
+                  price:
+                    type: object
+                    required:
+                    - amount
+                    - currency
+                    properties:
+                      amount:
+                        type: number
+                        description: Unit price
+                        example: 199.99
+                      currency:
+                        type: string
+                        description: Currency code
+                        example: USD
+                  lineTotal:
+                    type: object
+                    required:
+                    - amount
+                    - currency
+                    properties:
+                      amount:
+                        type: number
+                        description: Line total
+                        example: 399.98
+                      currency:
+                        type: string
+                        description: Currency code
+                        example: USD
+            totals:
+              type: object
+              required:
+              - subtotal
+              - total
+              properties:
+                subtotal:
+                  type: number
+                  description: Order subtotal
+                  example: 399.98
+                tax:
+                  type: number
+                  description: Tax amount
+                  example: 39.99
+                shipping:
+                  type: number
+                  description: Shipping cost
+                  example: 0
+                discount:
+                  type: number
+                  description: Discount amount
+                  example: 0
+                total:
+                  type: number
+                  description: Order total
+                  example: 439.97
+            shippingAddress:
+              type: object
+              required:
+              - line1
+              - city
+              - country
+              - postalCode
+              properties:
+                line1:
+                  type: string
+                  description: Address line 1
+                  example: 123 Main St
+                line2:
+                  type: string
+                  description: Address line 2
+                  example: Apt 4B
+                city:
+                  type: string
+                  description: City
+                  example: Berlin
+                region:
+                  type: string
+                  description: State/Province/Region
+                  example: Berlin
+                country:
+                  type: string
+                  description: Country code (ISO 3166-1 alpha-2)
+                  example: DE
+                postalCode:
+                  type: string
+                  description: Postal/ZIP code
+                  example: '10115'
+            billingAddress:
+              type: object
+              required:
+              - line1
+              - city
+              - country
+              - postalCode
+              properties:
+                line1:
+                  type: string
+                  description: Address line 1
+                  example: 123 Main St
+                line2:
+                  type: string
+                  description: Address line 2
+                  example: Apt 4B
+                city:
+                  type: string
+                  description: City
+                  example: Berlin
+                region:
+                  type: string
+                  description: State/Province/Region
+                  example: Berlin
+                country:
+                  type: string
+                  description: Country code (ISO 3166-1 alpha-2)
+                  example: DE
+                postalCode:
+                  type: string
+                  description: Postal/ZIP code
+                  example: '10115'
+            payment:
+              type: object
+              required:
+              - method
+              - status
+              properties:
+                method:
+                  type: string
+                  description: Payment method
+                  example: credit_card
+                status:
+                  type: string
+                  description: Payment status
+                  enum:
+                  - pending
+                  - approved
+                  - declined
+                  - refunded
+                  example: approved
+                lastFourDigits:
+                  type: string
+                  description: Last four digits of card number
+                  example: '4242'
+                brand:
+                  type: string
+                  description: Card brand
+                  example: Visa
+                externalPaymentId:
+                  type: string
+                  description: External payment processor ID
+                  example: py_1JKWqZCZ6qsJgndJhNR3U5QD
+            shipment:
+              type: object
+              properties:
+                carrier:
+                  type: string
+                  description: Shipping carrier
+                  example: DHL
+                trackingNumber:
+                  type: string
+                  description: Tracking number
+                  example: 1Z999AA10123456784
+                estimatedDelivery:
+                  type: string
+                  format: date
+                  description: Estimated delivery date
+                  example: '2025-09-10'
+                trackingUrl:
+                  type: string
+                  format: uri
+                  description: Tracking URL
+                  example: https://www.dhl.com/tracking/1Z999AA10123456784
+            created:
+              type: string
+              format: date-time
+              description: Order creation timestamp
+              example: '2025-09-08T12:34:56.789Z'
+            updated:
+              type: string
+              format: date-time
+              description: Order last update timestamp
+              example: '2025-09-08T12:45:22.123Z'
+        message:
+          type: string
+          description: Optional message
+          example: Order confirmed successfully
+        extensions:
+          type: object
+          description: Additional custom fields
           additionalProperties: true
     Order:
+      description: Confirmed order snapshot
       type: object
-      required: [id, status]
+      required:
+      - id
+      - status
       properties:
         id:
           type: string
+          description: Order identifier
+          example: ord-2025-09-08-123456
         status:
           type: string
-          enum: [confirmed, processing, shipped, delivered, cancelled, refunded]
+          description: Order status
+          enum:
+          - confirmed
+          - processing
+          - shipped
+          - delivered
+          - cancelled
+          - refunded
+          example: confirmed
         items:
           type: array
+          description: Order line items
           items:
-            $ref: "#/components/schemas/CartItem"
+            type: object
+            required:
+            - productId
+            - quantity
+            - price
+            properties:
+              productId:
+                type: string
+                example: acme-wh-001-black
+              name:
+                type: string
+                example: ACME Wireless Headphones Pro
+              quantity:
+                type: integer
+                example: 2
+              options:
+                type: object
+                additionalProperties: true
+              price:
+                type: object
+                required:
+                - amount
+                - currency
+                properties:
+                  amount:
+                    type: number
+                    example: 199.99
+                  currency:
+                    type: string
+                    example: USD
+              lineTotal:
+                type: object
+                required:
+                - amount
+                - currency
+                properties:
+                  amount:
+                    type: number
+                    example: 399.98
+                  currency:
+                    type: string
+                    example: USD
         totals:
           type: object
+          description: Order totals
           additionalProperties: true
+          example:
+            subtotal: 399.98
+            tax: 39.99
+            shipping: 0
+            total: 439.97
         created:
           type: string
           format: date-time
-    CheckoutConfirmResponse:
+          description: Order creation timestamp
+          example: '2025-09-08T12:34:56.789Z'
+    ProductSearchResponse:
+      description: Paginated product search results
       type: object
-      required: [order, orderId]
+      required:
+      - results
+      - pagination
       properties:
-        order:
-          $ref: "#/components/schemas/Order"
-        orderId:
-          type: string
-        orderStatusUrl:
-          type: string
-        message:
-          type: string
-    OrderStatusResponse:
+        results:
+          type: array
+          description: Matching products
+          items:
+            type: object
+            required:
+            - id
+            - name
+            - price
+            properties:
+              id:
+                type: string
+                description: Unique product identifier
+                example: acme-wh-001
+              name:
+                type: string
+                description: Product name
+                example: ACME Wireless Headphones Pro
+              brand:
+                type: string
+                description: Product brand
+                example: Acme
+              description:
+                type: string
+                description: Product description
+                example: Premium wireless headphones with noise cancellation
+              price:
+                type: object
+                required:
+                - amount
+                - currency
+                properties:
+                  amount:
+                    type: number
+                    description: Price amount
+                    example: 199.99
+                  currency:
+                    type: string
+                    description: Currency code (ISO 4217)
+                    example: USD
+              availability:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - in_stock
+                    - low_stock
+                    - out_of_stock
+                    - backorder
+                    - preorder
+                    example: in_stock
+                  quantity:
+                    type: integer
+                    example: 42
+              categories:
+                type: array
+                items:
+                  type: string
+                example:
+                - Electronics
+                - Audio
+                - Headphones
+              images:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    url:
+                      type: string
+                      example: https://example.com/images/acme-wh-001-main.jpg
+                    alt:
+                      type: string
+                      example: ACME Wireless Headphones Pro - Black
+              variants:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        pagination:
+          type: object
+          required:
+          - currentPage
+          - pageSize
+          - totalItems
+          - totalPages
+          properties:
+            currentPage:
+              type: integer
+              description: Current page number
+              example: 1
+            pageSize:
+              type: integer
+              description: Items per page
+              example: 10
+            totalItems:
+              type: integer
+              description: Total matching items
+              example: 42
+            totalPages:
+              type: integer
+              description: Total pages
+              example: 5
+    ProductSearchRequest:
+      description: Parameters for searching the product catalog
       type: object
-      required: [order]
       properties:
-        order:
-          $ref: "#/components/schemas/Order"
+        query:
+          type: string
+          description: Search query text
+          example: wireless headphones
+        filters:
+          type: object
+          description: Filters to apply to the search
+          additionalProperties: true
+          example:
+            brand: Acme
+            priceRange:
+              min: 50
+              max: 200
+        sort:
+          type: string
+          description: Sorting method
+          enum:
+          - price_asc
+          - price_desc
+          - name_asc
+          - name_desc
+          - relevance
+          - newest
+          default: relevance
+          example: price_asc
+        page:
+          type: integer
+          description: Page number (1-based)
+          minimum: 1
+          default: 1
+          example: 1
+        pageSize:
+          type: integer
+          description: Number of items per page
+          minimum: 1
+          maximum: 100
+          default: 10
+          example: 10
+        extensions:
+          type: object
+          description: Additional custom fields
+          additionalProperties: true
+    Product:
+      description: Canonical representation of a product
+      type: object
+      required:
+      - id
+      - name
+      - price
+      properties:
+        id:
+          type: string
+          description: Unique product identifier
+          example: acme-wh-001
+        name:
+          type: string
+          description: Product name
+          example: ACME Wireless Headphones Pro
+        brand:
+          type: string
+          description: Product brand
+          example: Acme
+        description:
+          type: string
+          description: Product description
+          example: Premium wireless headphones with noise cancellation
+        price:
+          type: object
+          required:
+          - amount
+          - currency
+          properties:
+            amount:
+              type: number
+              description: Price amount
+              example: 199.99
+            currency:
+              type: string
+              description: Currency code (ISO 4217)
+              example: USD
+        availability:
+          type: object
+          properties:
+            status:
+              type: string
+              enum:
+              - in_stock
+              - low_stock
+              - out_of_stock
+              - backorder
+              - preorder
+              description: Availability status
+              example: in_stock
+            quantity:
+              type: integer
+              description: Available quantity
+              example: 42
+        categories:
+          type: array
+          description: Product categories
+          items:
+            type: string
+          example:
+          - Electronics
+          - Audio
+          - Headphones
+        images:
+          type: array
+          description: Product images
+          items:
+            type: object
+            required:
+            - url
+            properties:
+              url:
+                type: string
+                format: uri
+                description: Image URL
+                example: https://example.com/images/acme-wh-001-main.jpg
+              alt:
+                type: string
+                description: Alternative text
+                example: ACME Wireless Headphones Pro - Black
+        variants:
+          type: array
+          description: Product variants
+          items:
+            type: object
+            required:
+            - id
+            - attributes
+            properties:
+              id:
+                type: string
+                description: Variant identifier
+                example: acme-wh-001-black
+              attributes:
+                type: object
+                description: Variant attributes
+                additionalProperties: true
+                example:
+                  color: black
+              price:
+                type: object
+                required:
+                - amount
+                - currency
+                properties:
+                  amount:
+                    type: number
+                    description: Price amount
+                    example: 199.99
+                  currency:
+                    type: string
+                    description: Currency code (ISO 4217)
+                    example: USD
+        extensions:
+          type: object
+          description: Additional custom fields
+          additionalProperties: true
+    RefreshRequest:
+      description: Refresh token used to obtain a new access token
+      type: object
+      required:
+      - refresh_token
+      properties:
+        refresh_token:
+          type: string
+          description: Previously issued refresh token
+          example: dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4...
+    RefreshResponse:
+      description: New access token after refresh
+      type: object
+      required:
+      - access_token
+      - token_type
+      - expires_in
+      properties:
+        access_token:
+          type: string
+          description: JWT access token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type:
+          type: string
+          description: Token type
+          example: bearer
+        expires_in:
+          type: integer
+          description: Access token lifetime in seconds
+          example: 3600
+    TokenResponse:
+      description: OAuth2-style access and refresh tokens
+      type: object
+      required:
+      - access_token
+      - token_type
+      - expires_in
+      properties:
+        access_token:
+          type: string
+          description: JWT access token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refresh_token:
+          type: string
+          description: Refresh token for obtaining new access tokens
+          example: dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4...
+        token_type:
+          type: string
+          description: Token type
+          default: bearer
+          example: bearer
+        expires_in:
+          type: integer
+          description: Access token lifetime in seconds
+          example: 3600

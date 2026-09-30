@@ -1,0 +1,387 @@
+openapi: 3.0.3
+info:
+  title: FastBuyJSON
+  version: 0.2.0
+  description: |
+    JSON contract for LLM agents talking to e-commerce APIs.
+    All commerce endpoints live under `/api/fastbuyjson`.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: http://localhost:3000/api/fastbuyjson
+    description: Node.js demo server
+  - url: http://localhost:8000/api/fastbuyjson
+    description: Python demo server
+tags:
+  - name: Discovery
+  - name: Auth
+  - name: Products
+  - name: Cart
+  - name: Checkout
+  - name: Orders
+security:
+  - bearerAuth: []
+  - {}
+
+paths:
+  /detect:
+    get:
+      tags: [Discovery]
+      summary: Detect FastBuyJSON support
+      operationId: detectSupport
+      security: []
+      responses:
+        "200":
+          description: Implementation metadata
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "public, max-age=300"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetectResponse"
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate with username and password
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: JWT tokens
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "no-store"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh an access token
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: New access token
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "no-store"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/certificate:
+    post:
+      tags: [Auth]
+      summary: Verify a client certificate (experimental)
+      operationId: verifyCertificate
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CertificateRequest"
+      responses:
+        "200":
+          description: Certificate session (reserved for future mTLS flows)
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "no-store"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /products/search:
+    post:
+      tags: [Products]
+      summary: Search the product catalog
+      operationId: searchProducts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductSearchRequest"
+            examples:
+              headphones:
+                $ref: "#/components/examples/SearchRequest"
+      responses:
+        "200":
+          description: Paginated product list
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "no-store"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductSearchResponse"
+
+  /cart/add:
+    post:
+      tags: [Cart]
+      summary: Add a product to the cart
+      operationId: addToCart
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddToCartRequest"
+      responses:
+        "200":
+          description: Updated cart
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "no-store"
+            Idempotency-Replayed:
+              schema:
+                type: boolean
+              description: "true when the response is replayed from a prior successful request with the same key"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/IdempotencyConflict"
+
+  /cart:
+    get:
+      tags: [Cart]
+      summary: Get the current cart
+      operationId: getCart
+      responses:
+        "200":
+          description: Cart snapshot
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "no-store"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /cart/{cartId}:
+    get:
+      tags: [Cart]
+      summary: Get a cart by id
+      operationId: getCartById
+      parameters:
+        - name: cartId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cart snapshot
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "no-store"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /checkout/initiate:
+    post:
+      tags: [Checkout]
+      summary: Start a checkout session
+      operationId: initiateCheckout
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutInitiateRequest"
+      responses:
+        "200":
+          description: Checkout session
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "no-store"
+            Idempotency-Replayed:
+              schema:
+                type: boolean
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutInitiateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/IdempotencyConflict"
+
+  /checkout/confirm:
+    post:
+      tags: [Checkout]
+      summary: Confirm payment and create an order
+      operationId: confirmCheckout
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutConfirmRequest"
+      responses:
+        "200":
+          description: Confirmed order
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "no-store"
+            Idempotency-Replayed:
+              schema:
+                type: boolean
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutConfirmResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/IdempotencyConflict"
+
+  /orders/{orderId}:
+    get:
+      tags: [Orders]
+      summary: Get order status
+      operationId: getOrderStatus
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order snapshot
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "no-store"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderStatusResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: Optional idempotency token for mutating POST requests. When present, servers must honor replays for 24h.
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Authentication failed
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          description: Bearer challenge when an invalid or malformed token was supplied
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    IdempotencyConflict:
+      description: Same idempotency key was reused with a different request payload
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  examples:
+    SearchRequest:
+      value:
+        query: wireless headphones
+        filters:
+          brand: Acme
+          priceRange:
+            min: 50
+            max: 200
+        sort: price_asc
+        page: 1
+        pageSize: 10

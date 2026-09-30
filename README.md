@@ -10,8 +10,9 @@ This repository is the **open-source standard plus a reference implementation**.
 
 ```
 fast-buy-json/
-├── openapi/fastbuyjson.yaml   # HTTP API (reconstructed from schemas + servers)
-├── schemas/                   # JSON Schema (draft-07) request/response models
+├── openapi/base.yaml            # Hand-authored paths/responses (no schemas)
+├── openapi/fastbuyjson.yaml   # Generated OpenAPI (do not edit by hand)
+├── schemas/                   # JSON Schema (draft-07) — single source of truth
 ├── examples/                  # Sample request payloads
 ├── src/server.js              # Node.js demo API
 ├── src/python/                # FastAPI demo API (same contract)
@@ -39,7 +40,7 @@ Base path: `/api/fastbuyjson`
 | `POST` | `/checkout/confirm` | Confirm payment / create order |
 | `GET` | `/orders/{orderId}` | Order status |
 
-OpenAPI: [`openapi/fastbuyjson.yaml`](openapi/fastbuyjson.yaml)
+OpenAPI: [`openapi/fastbuyjson.yaml`](openapi/fastbuyjson.yaml) (generated). Contract notes: [`docs/CONTRACT.md`](docs/CONTRACT.md). Changelog: [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Quick start (Node demo)
 
@@ -90,11 +91,16 @@ See [`mcp-server/README.md`](mcp-server/README.md) and [`mcp-server/EXAMPLES.md`
 ## Validation
 
 ```bash
-pip install jsonschema==4.22.*
+pip install -r requirements.txt
 python scripts/validate_schemas.py
+python scripts/build_openapi.py --check
+openapi-spec-validator openapi/fastbuyjson.yaml
+python scripts/check_versions.py
+npm test
+python -m pytest tests/test_python_server.py
 ```
 
-CI runs the same checks on every pull request.
+CI runs these gates on every pull request.
 
 ## Recovery notes
 

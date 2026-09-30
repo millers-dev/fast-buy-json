@@ -135,3 +135,53 @@ def test_name_sort(client):
     assert response.status_code == 200
     names = [item["name"] for item in response.json()["results"]]
     assert names == sorted(names)
+
+
+def test_detect_spec_version(client):
+    response = client.get(f"{API}/detect")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["standard"] == "FastBuyJSON"
+    assert body["specVersion"] == "0.2.0"
+    assert body["implementationVersion"] == "0.2.0"
+    assert response.headers.get("cache-control") == "public, max-age=300"
+
+
+def test_product_not_found_problem_json(client):
+    response = client.post(
+        f"{API}/cart/add",
+        json={"productId": "missing", "quantity": 1},
+    )
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("application/problem+json")
+    body = response.json()
+    assert body["code"] == "PRODUCT_NOT_FOUND"
+    assert body["status"] == 404
+
+
+def test_invalid_bearer_problem_json(client):
+    response = client.get(
+        f"{API}/cart",
+        headers={"Authorization": "Bearer not-a-jwt"},
+    )
+    assert response.status_code == 401
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json()["code"] == "INVALID_TOKEN"
+    assert "Bearer" in response.headers.get("www-authenticate", "")
+
+
+def test_idempotency_replayed_header(client):
+    key = "py-idem-header"
+    first = client.post(
+        f"{API}/cart/add",
+        json={"productId": "acme-wh-001", "quantity": 1},
+        headers={"Idempotency-Key": key},
+    )
+    assert first.status_code == 200
+    replay = client.post(
+        f"{API}/cart/add",
+        json={"productId": "acme-wh-001", "quantity": 1},
+        headers={"Idempotency-Key": key},
+    )
+    assert replay.status_code == 200
+    assert replay.headers.get("idempotency-replayed") == "true"

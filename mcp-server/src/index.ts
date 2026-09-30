@@ -24,7 +24,7 @@ import { FastBuyJSONAdapter } from './adapter.js';
 const server = new Server(
   {
     name: 'fastbuyjson-mcp-server-reference',
-    version: '0.1.0',
+    version: '0.2.0',
   },
   {
     capabilities: {
