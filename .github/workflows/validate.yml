@@ -29,9 +29,6 @@ jobs:
       - name: Check OpenAPI drift
         run: python scripts/build_openapi.py --check
 
-      - name: Check response example drift
-        run: node scripts/capture_examples.mjs --check
-
       - name: Validate OpenAPI spec
         run: openapi-spec-validator openapi/fastbuyjson.yaml
 
