@@ -30,7 +30,9 @@
                         "debit_card",
                         "paypal",
                         "bank_transfer",
-                        "digital_wallet"
+                        "digital_wallet",
+                        "apple_pay",
+                        "google_pay"
                     ],
                     "examples": [
                         "credit_card"

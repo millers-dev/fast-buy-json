@@ -1,6 +1,6 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "Order Status",
+    "title": "Order Status Response",
     "description": "Returns order state and tracking information",
     "type": "object",
     "required": [
