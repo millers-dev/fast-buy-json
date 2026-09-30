@@ -179,12 +179,12 @@ test("rejects invalid bearer tokens", async () => {
   assert.match(headers["www-authenticate"] || "", /Bearer/i);
 });
 
-test("detect advertises specVersion 0.3.0", async () => {
+test("detect advertises specVersion 0.4.0", async () => {
   const { status, json, headers } = await request("GET", `${API}/detect`);
   assert.equal(status, 200);
   assert.equal(json.standard, "FastBuyJSON");
-  assert.equal(json.specVersion, "0.3.0");
-  assert.equal(json.implementationVersion, "0.3.0");
+  assert.equal(json.specVersion, "0.4.0");
+  assert.equal(json.implementationVersion, "0.4.0");
   assert.equal(headers["cache-control"], "public, max-age=300");
 });
 
@@ -295,6 +295,62 @@ test("expired idempotency record allows reuse", async () => {
   });
   assert.equal(second.status, 200);
   assert.equal(second.json.cart.items[0].quantity, 3);
+});
+
+test("typed filters and legacy totals without discount", async () => {
+  const search = await request("POST", `${API}/products/search`, {
+    body: {
+      filters: {
+        brand: "Acme",
+        categories: ["Headphones"],
+        priceRange: { min: 90, max: 210 },
+      },
+    },
+  });
+  assert.equal(search.status, 200);
+  assert.equal(search.json.pagination.totalItems, 2);
+
+  const added = await request("POST", `${API}/cart/add`, {
+    body: { productId: "acme-wh-002", quantity: 1 },
+  });
+  assert.equal(added.status, 200);
+  assert.equal(added.json.cart.totals.subtotal, 99.99);
+  assert.equal(added.json.cart.totals.shipping, 10);
+  assert.equal(added.json.cart.totals.tax, 10);
+  assert.equal(added.json.cart.totals.total, 119.99);
+  assert.ok(added.json.cart.totals.taxBreakdown);
+});
+
+test("discount apply and invalid code", async () => {
+  await request("POST", `${API}/cart/add`, {
+    body: { productId: "acme-wh-002", quantity: 1 },
+  });
+  const applied = await request("POST", `${API}/cart/discount`, {
+    body: { code: "SAVE10" },
+  });
+  assert.equal(applied.status, 200);
+  assert.equal(applied.json.cart.totals.discount, 10);
+
+  const bad = await request("POST", `${API}/cart/discount`, {
+    body: { code: "NOPE" },
+  });
+  assert.equal(bad.status, 422);
+  expectProblem(bad.json, { status: 422, code: "INVALID_DISCOUNT_CODE" });
+});
+
+test("detect exposes capabilities at 0.4.0", async () => {
+  const { status, json } = await request("GET", `${API}/detect`);
+  assert.equal(status, 200);
+  assert.equal(json.specVersion, "0.4.0");
+  assert.ok(json.capabilities?.shipping?.options?.includes("express"));
+  assert.ok(json.supportedFeatures.includes("discounts"));
+});
+
+test("shipping options endpoint", async () => {
+  const { status, json } = await request("GET", `${API}/shipping/options`);
+  assert.equal(status, 200);
+  assert.equal(json.currency, "USD");
+  assert.ok(json.options.some((option) => option.id === "standard"));
 });
 
 test("idempotent replay sets Idempotency-Replayed header", async () => {

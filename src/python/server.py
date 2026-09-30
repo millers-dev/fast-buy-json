@@ -29,8 +29,17 @@ from idempotency import (
     lookup_idempotency,
     store_idempotency,
 )
+from commerce import (
+    DEFAULT_CURRENCY,
+    SHIPPING_CATALOG,
+    apply_product_filters,
+    build_detect_capabilities,
+    build_shipping_option_views,
+    lookup_promo,
+    recompute_cart_totals,
+)
 
-SPEC_VERSION = "0.3.0"
+SPEC_VERSION = "0.4.0"
 
 app = FastAPI(
     title="FastBuyJSON Demo API",
@@ -172,25 +181,6 @@ def reset_demo_state() -> None:
     DB["orders"].clear()
     DB["checkout_sessions"].clear()
     clear_idempotency_store()
-
-
-def recompute_cart_totals(cart: Dict[str, Any]) -> None:
-    for item in cart.get("items", []):
-        item["lineTotal"] = {
-            "amount": item["price"]["amount"] * item["quantity"],
-            "currency": item["price"]["currency"],
-        }
-    cart["updated"] = datetime.now().isoformat()
-    subtotal = sum(item["lineTotal"]["amount"] for item in cart.get("items", []))
-    totals = cart.setdefault("totals", {})
-    totals["subtotal"] = subtotal
-    totals["tax"] = subtotal * 0.1
-    totals["shipping"] = 0 if subtotal > 100 else 10
-    if totals.get("discount") is None:
-        totals["discount"] = 0
-    totals["total"] = (
-        totals["subtotal"] + totals["tax"] + totals["shipping"] - totals.get("discount", 0)
-    )
 
 
 def _require_cart(user_id: str, instance: str) -> Dict[str, Any]:
@@ -376,8 +366,13 @@ async def detect_fastbuyjson():
             "authentication",
             "anonymous_cart",
             "guest_checkout",
+            "typed_filters",
+            "shipping_selection",
+            "tax_breakdown",
+            "discounts",
         ],
-        "endpoints": ["products", "cart", "checkout", "orders", "auth"],
+        "capabilities": build_detect_capabilities(),
+        "endpoints": ["products", "cart", "checkout", "orders", "auth", "shipping"],
         "authentication": {
             "methods": ["jwt", "certificate", "anonymous"],
             "endpoints": ["/auth/login", "/auth/refresh", "/auth/certificate"],
@@ -416,15 +411,8 @@ async def search_products(request: Request):
     else:
         results = copy.deepcopy(DB["products"])
 
-    # Apply filters
     if filters:
-        if "brand" in filters:
-            brand = filters["brand"].lower()
-            results = [
-                product for product in results if product["brand"].lower() == brand
-            ]
-
-        # Add more filter handling as needed
+        results = apply_product_filters(results, filters)
 
     # Apply sorting
     if sort:
@@ -498,8 +486,19 @@ async def add_to_cart(
             "items": [],
             "created": datetime.now().isoformat(),
             "updated": datetime.now().isoformat(),
-            "totals": {"subtotal": 0, "tax": 0, "shipping": 0, "total": 0},
+            "appliedPromoCode": None,
+            "appliedDiscounts": [],
+            "shipping": {"selectedOptionId": "standard"},
+            "totals": {
+                "currency": DEFAULT_CURRENCY,
+                "subtotal": 0,
+                "discount": 0,
+                "tax": 0,
+                "shipping": 0,
+                "total": 0,
+            },
         }
+        recompute_cart_totals(DB["carts"][user_id])
 
     cart = DB["carts"][user_id]
 
@@ -663,15 +662,54 @@ async def clear_cart(authorization: Optional[str] = Header(None)):
     user_id = get_request_user_id(authorization)
     cart = _require_cart(user_id, "/cart")
     cart["items"] = []
-    cart["totals"] = {
-        "subtotal": 0,
-        "tax": 0,
-        "shipping": 0,
-        "discount": 0,
-        "total": 0,
-    }
-    cart["updated"] = datetime.now().isoformat()
+    cart["appliedPromoCode"] = None
+    cart["appliedDiscounts"] = []
+    cart["shipping"] = {"selectedOptionId": "standard"}
+    recompute_cart_totals(cart)
     return {"cart": cart}
+
+
+@api_router.get("/shipping/options")
+async def list_shipping_options(authorization: Optional[str] = Header(None)):
+    user_id = get_request_user_id(authorization)
+    cart = DB["carts"].get(user_id)
+    taxable_base = 0.0
+    if cart:
+        recompute_cart_totals(cart)
+        taxable_base = cart.get("totals", {}).get("taxableBase", 0)
+    return {
+        "currency": DEFAULT_CURRENCY,
+        "options": build_shipping_option_views(taxable_base),
+    }
+
+
+@api_router.post("/cart/discount")
+async def apply_cart_discount(
+    request: Request, authorization: Optional[str] = Header(None)
+):
+    user_id = get_request_user_id(authorization)
+    cart = _require_cart(user_id, "/cart/discount")
+    data = await request.json()
+    code = data.get("code")
+
+    if code is None or code == "":
+        cart["appliedPromoCode"] = None
+        recompute_cart_totals(cart)
+        return {"cart": cart, "message": "Discount cleared"}
+
+    promo = lookup_promo(code)
+    if not promo:
+        raise ProblemException(
+            status_code=422,
+            code="INVALID_DISCOUNT_CODE",
+            title="Invalid discount code",
+            detail=f"No promotion matches code {code}",
+            instance="/cart/discount",
+        )
+
+    cart["appliedPromoCode"] = promo["code"]
+    recompute_cart_totals(cart)
+    return {"cart": cart, "message": "Discount applied"}
 
 
 @api_router.post("/checkout/initiate")
@@ -749,13 +787,49 @@ async def initiate_checkout(
             },
         )
 
+    cart = DB["carts"][user_id]
+    discount_code = data.get("discountCode")
+    shipping_option_id = data.get("shippingOptionId")
+
+    if discount_code not in (None, ""):
+        promo = lookup_promo(discount_code)
+        if not promo:
+            raise ProblemException(
+                status_code=422,
+                code="INVALID_DISCOUNT_CODE",
+                title="Invalid discount code",
+                detail=f"No promotion matches code {discount_code}",
+                instance="/checkout/initiate",
+            )
+        cart["appliedPromoCode"] = promo["code"]
+
+    if shipping_option_id:
+        if not any(option["id"] == shipping_option_id for option in SHIPPING_CATALOG):
+            raise ProblemException(
+                status_code=400,
+                code="VALIDATION_ERROR",
+                title="Validation failed",
+                detail="Unknown shippingOptionId",
+                instance="/checkout/initiate",
+                errors=[
+                    {
+                        "field": "shippingOptionId",
+                        "message": "Must be a known shipping option",
+                    }
+                ],
+            )
+        cart.setdefault("shipping", {"selectedOptionId": "standard"})
+        cart["shipping"]["selectedOptionId"] = shipping_option_id
+
+    recompute_cart_totals(
+        cart, tax_country=shipping_address.get("country") if shipping_address else None
+    )
+
     session_token = str(uuid4())
     verification_token = str(uuid4())
     expires_at = datetime.now() + timedelta(hours=1)
 
-    risk_score = calculate_risk_score(
-        customer_info, shipping_address, DB["carts"][user_id]
-    )
+    risk_score = calculate_risk_score(customer_info, shipping_address, cart)
 
     DB["checkout_sessions"][session_token] = {
         "userId": user_id,

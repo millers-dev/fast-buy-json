@@ -7,17 +7,67 @@
 
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 
+export interface SearchFilters {
+  brand?: string;
+  categories?: string[];
+  /** @deprecated use categories[] */
+  category?: string;
+  priceRange?: {
+    min?: number;
+    max?: number;
+    currency?: string;
+  };
+  /** @deprecated use priceRange */
+  minPrice?: number;
+  /** @deprecated use priceRange */
+  maxPrice?: number;
+  availability?: string[];
+  extensions?: Record<string, unknown>;
+}
+
 export interface SearchProductsParams {
   query?: string;
-  filters?: {
-    brand?: string;
-    category?: string;
-    minPrice?: number;
-    maxPrice?: number;
-  };
+  filters?: SearchFilters;
   sort?: 'price_asc' | 'price_desc' | 'name_asc' | 'name_desc' | 'relevance' | 'newest';
   page?: number;
   pageSize?: number;
+}
+
+export function normalizeSearchFilters(filters?: SearchFilters): Record<string, unknown> | undefined {
+  if (!filters) {
+    return undefined;
+  }
+
+  const normalized: Record<string, unknown> = {};
+
+  if (filters.brand) {
+    normalized.brand = filters.brand;
+  }
+
+  if (filters.categories?.length) {
+    normalized.categories = filters.categories;
+  } else if (filters.category) {
+    normalized.categories = [filters.category];
+  }
+
+  if (filters.priceRange) {
+    normalized.priceRange = filters.priceRange;
+  } else if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
+    normalized.priceRange = {
+      ...(filters.minPrice !== undefined ? { min: filters.minPrice } : {}),
+      ...(filters.maxPrice !== undefined ? { max: filters.maxPrice } : {}),
+    };
+  }
+
+  if (filters.availability?.length) {
+    normalized.availability = filters.availability;
+  }
+
+  if (filters.extensions) {
+    normalized.extensions = filters.extensions;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
 export interface AddToCartParams {
@@ -50,6 +100,12 @@ export interface CheckoutInitiateParams {
     postalCode: string;
     country: string;
   };
+  shippingOptionId?: string;
+  discountCode?: string;
+}
+
+export interface ApplyDiscountParams {
+  code?: string | null;
 }
 
 export interface CheckoutConfirmParams {
@@ -77,7 +133,7 @@ export class FastBuyJSONAdapter {
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl || process.env.FASTBUYJSON_API_URL || 'http://localhost:3000/api/fastbuyjson';
-    this.userAgent = 'FastBuyJSON-MCP-Server/0.3.0';
+    this.userAgent = 'FastBuyJSON-MCP-Server/0.4.0';
     
     this.client = axios.create({
       baseURL: this.baseUrl,
@@ -172,7 +228,7 @@ export class FastBuyJSONAdapter {
     try {
       const response = await this.client.post('/products/search', {
         query: params.query,
-        filters: params.filters,
+        filters: normalizeSearchFilters(params.filters),
         sort: params.sort,
         page: params.page || 1,
         pageSize: params.pageSize || 10,
@@ -241,6 +297,33 @@ export class FastBuyJSONAdapter {
   /**
    * Initiate checkout process
    */
+  async getShippingOptions(): Promise<any> {
+    try {
+      const response = await this.client.get('/shipping/options');
+      return response.data;
+    } catch (error) {
+      throw new Error(
+        `Get shipping options failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  async applyDiscount(params: ApplyDiscountParams): Promise<any> {
+    try {
+      const response = await this.client.post('/cart/discount', {
+        code: params.code ?? null,
+      });
+      if (response.data.cart?.id) {
+        this.cartId = response.data.cart.id;
+      }
+      return response.data;
+    } catch (error) {
+      throw new Error(
+        `Apply discount failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
   async initiateCheckout(params: CheckoutInitiateParams): Promise<any> {
     try {
       const response = await this.client.post('/checkout/initiate', {
@@ -248,6 +331,8 @@ export class FastBuyJSONAdapter {
         customerInfo: params.customerInfo,
         shippingAddress: params.shippingAddress,
         billingAddress: params.billingAddress,
+        shippingOptionId: params.shippingOptionId,
+        discountCode: params.discountCode,
       });
 
       // Store session token for checkout confirmation

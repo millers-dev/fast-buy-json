@@ -24,7 +24,7 @@ import { FastBuyJSONAdapter } from './adapter.js';
 const server = new Server(
   {
     name: 'fastbuyjson-mcp-server-reference',
-    version: '0.3.0',
+    version: '0.4.0',
   },
   {
     capabilities: {
@@ -40,9 +40,17 @@ const SearchProductsSchema = z.object({
   query: z.string().optional(),
   filters: z.object({
     brand: z.string().optional(),
+    categories: z.array(z.string()).optional(),
     category: z.string().optional(),
+    priceRange: z.object({
+      min: z.number().optional(),
+      max: z.number().optional(),
+      currency: z.string().optional(),
+    }).optional(),
     minPrice: z.number().optional(),
     maxPrice: z.number().optional(),
+    availability: z.array(z.string()).optional(),
+    extensions: z.record(z.unknown()).optional(),
   }).optional(),
   sort: z.enum(['price_asc', 'price_desc', 'name_asc', 'name_desc', 'relevance', 'newest']).optional(),
   page: z.number().min(1).default(1),
@@ -79,6 +87,12 @@ const CheckoutInitiateSchema = z.object({
     postalCode: z.string(),
     country: z.string(),
   }).optional(),
+  shippingOptionId: z.string().optional(),
+  discountCode: z.string().optional(),
+});
+
+const ApplyDiscountSchema = z.object({
+  code: z.string().nullable().optional(),
 });
 
 const CheckoutConfirmSchema = z.object({
@@ -123,11 +137,21 @@ const tools: Tool[] = [
           type: 'object',
           properties: {
             brand: { type: 'string', description: 'Filter by brand' },
-            category: { type: 'string', description: 'Filter by category' },
-            minPrice: { type: 'number', description: 'Minimum price filter' },
-            maxPrice: { type: 'number', description: 'Maximum price filter' },
+            categories: { type: 'array', items: { type: 'string' }, description: 'Match any category' },
+            category: { type: 'string', description: 'Legacy single category (mapped to categories[])' },
+            priceRange: {
+              type: 'object',
+              properties: {
+                min: { type: 'number' },
+                max: { type: 'number' },
+                currency: { type: 'string' },
+              },
+            },
+            minPrice: { type: 'number', description: 'Legacy min price (mapped to priceRange.min)' },
+            maxPrice: { type: 'number', description: 'Legacy max price (mapped to priceRange.max)' },
+            availability: { type: 'array', items: { type: 'string' } },
           },
-          description: 'Optional filters to apply to search',
+          description: 'Typed catalog filters (legacy flat price/category keys are mapped for one release)',
         },
         sort: {
           type: 'string',
@@ -233,8 +257,37 @@ const tools: Tool[] = [
           },
           description: 'Billing address (optional, uses shipping if not provided)',
         },
+        shippingOptionId: {
+          type: 'string',
+          description: 'Shipping option id (standard or express)',
+        },
+        discountCode: {
+          type: 'string',
+          description: 'Optional promo code applied at checkout',
+        },
       },
       required: ['cartId', 'customerInfo', 'shippingAddress'],
+    },
+  },
+  {
+    name: 'fastbuy_get_shipping_options',
+    description: 'List shipping options for the current cart context',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'fastbuy_apply_discount',
+    description: 'Apply or clear a promotional discount on the cart',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        code: {
+          type: 'string',
+          description: 'Promo code (omit or null to clear)',
+        },
+      },
     },
   },
   {
@@ -376,6 +429,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'fastbuy_checkout_initiate': {
         const validated = CheckoutInitiateSchema.parse(args);
         const result = await adapter.initiateCheckout(validated);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'fastbuy_get_shipping_options': {
+        const result = await adapter.getShippingOptions();
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'fastbuy_apply_discount': {
+        const validated = ApplyDiscountSchema.parse(args ?? {});
+        const result = await adapter.applyDiscount(validated);
         return {
           content: [
             {

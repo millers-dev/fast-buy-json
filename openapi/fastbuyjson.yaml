@@ -3,7 +3,7 @@
 openapi: 3.0.3
 info:
   title: FastBuyJSON
-  version: 0.3.0
+  version: 0.4.0
   description: 'JSON contract for LLM agents talking to e-commerce APIs.
 
     All commerce endpoints live under `/api/fastbuyjson`.
@@ -22,6 +22,7 @@ tags:
 - name: Auth
 - name: Products
 - name: Cart
+- name: Shipping
 - name: Checkout
 - name: Orders
 security:
@@ -300,6 +301,56 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /cart/discount:
+    post:
+      tags:
+      - Cart
+      summary: Apply or clear a cart discount code
+      operationId: applyCartDiscount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartDiscountRequest'
+      responses:
+        '200':
+          description: Updated cart
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Invalid discount code
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /shipping/options:
+    get:
+      tags:
+      - Shipping
+      summary: List shipping options for the current cart context
+      operationId: listShippingOptions
+      responses:
+        '200':
+          description: Shipping catalog with contextual amounts
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShippingOptionsResponse'
   /cart/{cartId}:
     get:
       tags:
@@ -547,6 +598,16 @@ components:
           type: string
           description: Postal/ZIP code
           example: '10115'
+    CartDiscountRequest:
+      description: Apply or clear a promotional discount on the cart
+      type: object
+      properties:
+        code:
+          type:
+          - string
+          - 'null'
+          description: Promo code to apply; null or omitted clears the current discount
+          example: SAVE10
     CartItem:
       description: Line item in a shopping cart
       type: object
@@ -685,28 +746,76 @@ components:
                         type: string
                         description: Currency code
                         example: USD
+            shipping:
+              type: object
+              description: Selected shipping option and catalog snapshot
+              properties:
+                selectedOptionId:
+                  type: string
+                  example: standard
+                amount:
+                  type: object
+                  required:
+                  - amount
+                  - currency
+                  properties:
+                    amount:
+                      type: number
+                    currency:
+                      type: string
+                options:
+                  type: array
+                  items:
+                    type: object
+            appliedDiscounts:
+              type: array
+              items:
+                type: object
             totals:
               type: object
               required:
               - subtotal
               - total
               properties:
+                currency:
+                  type: string
+                  example: USD
                 subtotal:
                   type: number
                   description: Cart subtotal
+                  example: 399.98
+                discount:
+                  type: number
+                  description: Discount amount
+                  example: 0
+                taxableBase:
+                  type: number
                   example: 399.98
                 tax:
                   type: number
                   description: Tax amount
                   example: 39.99
+                taxBreakdown:
+                  type: object
+                  properties:
+                    rate:
+                      type: number
+                    taxableAmount:
+                      type: number
+                    amount:
+                      type: number
+                    label:
+                      type: string
+                    jurisdiction:
+                      type: string
                 shipping:
                   type: number
                   description: Shipping cost
                   example: 0
-                discount:
-                  type: number
-                  description: Discount amount
-                  example: 0
+                discountBreakdown:
+                  type: array
+                  items:
+                    type: object
                 total:
                   type: number
                   description: Cart total
@@ -805,18 +914,70 @@ components:
                   currency:
                     type: string
                     example: USD
+        shipping:
+          type: object
+          description: Selected shipping option and catalog snapshot
+          properties:
+            selectedOptionId:
+              type: string
+              example: standard
+            amount:
+              type: object
+              required:
+              - amount
+              - currency
+              properties:
+                amount:
+                  type: number
+                currency:
+                  type: string
+            options:
+              type: array
+              items:
+                type: object
+        appliedDiscounts:
+          type: array
+          description: Non-stackable discounts currently applied
+          items:
+            type: object
         totals:
           type: object
           properties:
+            currency:
+              type: string
+              example: USD
             subtotal:
+              type: number
+              example: 399.98
+            discount:
+              type: number
+              example: 0
+            taxableBase:
               type: number
               example: 399.98
             tax:
               type: number
               example: 39.99
+            taxBreakdown:
+              type: object
+              properties:
+                rate:
+                  type: number
+                taxableAmount:
+                  type: number
+                amount:
+                  type: number
+                label:
+                  type: string
+                jurisdiction:
+                  type: string
             shipping:
               type: number
               example: 0
+            discountBreakdown:
+              type: array
+              items:
+                type: object
             total:
               type: number
               example: 439.97
@@ -1249,6 +1410,14 @@ components:
               type: string
               description: Postal/ZIP code
               example: '10115'
+        shippingOptionId:
+          type: string
+          description: Shipping option to use for this checkout (defaults to cart selection or standard)
+          example: express
+        discountCode:
+          type: string
+          description: Optional promo code to apply before totals are finalized
+          example: SAVE10
         extensions:
           type: object
           description: Additional custom fields
@@ -1293,6 +1462,7 @@ components:
       - specVersion
       - implementationVersion
       - supportedFeatures
+      - capabilities
       - endpoints
       properties:
         standard:
@@ -1302,11 +1472,39 @@ components:
         specVersion:
           type: string
           description: FastBuyJSON specification version
-          example: 0.3.0
+          example: 0.4.0
         implementationVersion:
           type: string
           description: Server implementation version
-          example: 0.3.0
+          example: 0.4.0
+        capabilities:
+          type: object
+          description: Structured commerce capability descriptor
+          additionalProperties: true
+          example:
+            filters:
+              fields:
+              - brand
+              - categories
+              - priceRange
+              - availability
+              - extensions
+              additionalProperties: true
+            shipping:
+              options:
+              - standard
+              - express
+              freeShippingThreshold:
+                amount: 100
+                currency: USD
+            tax:
+              mode: jurisdiction
+              defaultRate: 0.1
+            discounts:
+              types:
+              - percentage
+              - fixed
+              stackable: false
         supportedFeatures:
           type: array
           description: Supported FastBuyJSON features
@@ -1366,6 +1564,39 @@ components:
               type: string
               format: uri
               example: https://example.com
+    AppliedDiscount:
+      description: Discount applied to the cart (non-stackable)
+      type: object
+      required:
+      - code
+      - type
+      - label
+      - amount
+      properties:
+        code:
+          type: string
+          example: SAVE10
+        type:
+          type: string
+          enum:
+          - percentage
+          - fixed
+          example: percentage
+        label:
+          type: string
+          example: 10% off
+        amount:
+          type: object
+          required:
+          - amount
+          - currency
+          properties:
+            amount:
+              type: number
+              example: 10
+            currency:
+              type: string
+              example: USD
     Error:
       description: RFC 9457 problem details with FastBuyJSON error code
       type: object
@@ -1898,13 +2129,56 @@ components:
           example: wireless headphones
         filters:
           type: object
-          description: Filters to apply to the search
+          description: Typed catalog filters (additionalProperties remains open in 0.4.0)
           additionalProperties: true
+          properties:
+            brand:
+              type: string
+              description: Exact brand match (case-insensitive)
+              example: Acme
+            categories:
+              type: array
+              description: Match products in any listed category
+              items:
+                type: string
+              example:
+              - Headphones
+            priceRange:
+              type: object
+              description: Inclusive bounds on product price.amount
+              properties:
+                min:
+                  type: number
+                max:
+                  type: number
+                currency:
+                  type: string
+                  default: USD
+                  example: USD
+            availability:
+              type: array
+              description: Subset of product availability.status values
+              items:
+                type: string
+                enum:
+                - in_stock
+                - low_stock
+                - out_of_stock
+                - backorder
+                - preorder
+            extensions:
+              type: object
+              additionalProperties: true
           example:
             brand: Acme
+            categories:
+            - Headphones
             priceRange:
               min: 50
               max: 200
+              currency: USD
+            availability:
+            - in_stock
         sort:
           type: string
           description: Sorting method
@@ -2082,6 +2356,142 @@ components:
           type: integer
           description: Access token lifetime in seconds
           example: 3600
+    ShippingOption:
+      description: Selectable shipping method with price and delivery estimate
+      type: object
+      required:
+      - id
+      - label
+      - amount
+      - estimatedDelivery
+      properties:
+        id:
+          type: string
+          example: standard
+        label:
+          type: string
+          example: Standard Shipping
+        amount:
+          type: object
+          required:
+          - amount
+          - currency
+          properties:
+            amount:
+              type: number
+            currency:
+              type: string
+              example: USD
+        estimatedDelivery:
+          type: object
+          required:
+          - minDays
+          - maxDays
+          properties:
+            minDays:
+              type: integer
+              minimum: 0
+              example: 3
+            maxDays:
+              type: integer
+              minimum: 0
+              example: 5
+        freeOver:
+          type: object
+          required:
+          - amount
+          - currency
+          properties:
+            amount:
+              type: number
+            currency:
+              type: string
+        description:
+          type: string
+          example: Delivered in 3–5 business days
+    ShippingOptionsResponse:
+      description: Discoverable shipping methods for the current cart context
+      type: object
+      required:
+      - currency
+      - options
+      properties:
+        currency:
+          type: string
+          example: USD
+        options:
+          type: array
+          items:
+            type: object
+            required:
+            - id
+            - label
+            - amount
+            - estimatedDelivery
+            properties:
+              id:
+                type: string
+              label:
+                type: string
+              amount:
+                type: object
+                required:
+                - amount
+                - currency
+                properties:
+                  amount:
+                    type: number
+                  currency:
+                    type: string
+              estimatedDelivery:
+                type: object
+                required:
+                - minDays
+                - maxDays
+                properties:
+                  minDays:
+                    type: integer
+                  maxDays:
+                    type: integer
+              freeOver:
+                type: object
+                properties:
+                  amount:
+                    type: number
+                  currency:
+                    type: string
+              description:
+                type: string
+    TaxBreakdown:
+      description: Structured tax line applied to taxable merchandise base
+      type: object
+      required:
+      - rate
+      - taxableAmount
+      - amount
+      - label
+      - jurisdiction
+      properties:
+        rate:
+          type: number
+          description: Tax rate as a decimal fraction
+          example: 0.1
+        taxableAmount:
+          type: number
+          description: Amount tax was calculated on (subtotal minus discount)
+          example: 99.99
+        amount:
+          type: number
+          description: Tax amount
+          example: 10
+        label:
+          type: string
+          description: Human-readable tax label
+          example: default
+        jurisdiction:
+          type: string
+          description: Tax jurisdiction identifier (e.g. country code)
+          example: default
     TokenResponse:
       description: OAuth2-style access and refresh tokens
       type: object

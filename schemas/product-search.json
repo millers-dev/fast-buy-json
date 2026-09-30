@@ -13,15 +13,80 @@
         },
         "filters": {
             "type": "object",
-            "description": "Filters to apply to the search",
+            "description": "Typed catalog filters (additionalProperties remains open in 0.4.0)",
             "additionalProperties": true,
+            "properties": {
+                "brand": {
+                    "type": "string",
+                    "description": "Exact brand match (case-insensitive)",
+                    "examples": [
+                        "Acme"
+                    ]
+                },
+                "categories": {
+                    "type": "array",
+                    "description": "Match products in any listed category",
+                    "items": {
+                        "type": "string"
+                    },
+                    "examples": [
+                        [
+                            "Headphones"
+                        ]
+                    ]
+                },
+                "priceRange": {
+                    "type": "object",
+                    "description": "Inclusive bounds on product price.amount",
+                    "properties": {
+                        "min": {
+                            "type": "number"
+                        },
+                        "max": {
+                            "type": "number"
+                        },
+                        "currency": {
+                            "type": "string",
+                            "default": "USD",
+                            "examples": [
+                                "USD"
+                            ]
+                        }
+                    }
+                },
+                "availability": {
+                    "type": "array",
+                    "description": "Subset of product availability.status values",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "in_stock",
+                            "low_stock",
+                            "out_of_stock",
+                            "backorder",
+                            "preorder"
+                        ]
+                    }
+                },
+                "extensions": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            },
             "examples": [
                 {
                     "brand": "Acme",
+                    "categories": [
+                        "Headphones"
+                    ],
                     "priceRange": {
                         "min": 50,
-                        "max": 200
-                    }
+                        "max": 200,
+                        "currency": "USD"
+                    },
+                    "availability": [
+                        "in_stock"
+                    ]
                 }
             ]
         },

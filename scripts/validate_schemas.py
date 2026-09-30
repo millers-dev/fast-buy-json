@@ -16,8 +16,10 @@ EXAMPLES = ROOT / "examples"
 
 EXAMPLE_SCHEMA_PAIRS = (
     (EXAMPLES / "search-request.json", SCHEMAS / "product-search.json"),
+    (EXAMPLES / "search-request-typed.json", SCHEMAS / "product-search.json"),
     (EXAMPLES / "add-to-cart-request.json", SCHEMAS / "add-to-cart.json"),
     (EXAMPLES / "checkout-initiate-request.json", SCHEMAS / "checkout-initiate.json"),
+    (EXAMPLES / "cart-discount-request.json", SCHEMAS / "cart-discount.json"),
 )
 
 JSON_GLOBS = (

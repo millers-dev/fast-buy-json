@@ -1,0 +1,20 @@
+{
+    "query": "headphones",
+    "filters": {
+        "brand": "Acme",
+        "categories": [
+            "Headphones"
+        ],
+        "priceRange": {
+            "min": 50,
+            "max": 250,
+            "currency": "USD"
+        },
+        "availability": [
+            "in_stock"
+        ]
+    },
+    "sort": "price_asc",
+    "page": 1,
+    "pageSize": 10
+}

@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-09-30
+
+### Added
+
+- **Typed search filters:** `brand`, `categories[]`, `priceRange`, `availability[]`, and `extensions` on `POST /products/search` (both reference servers).
+- **Shipping:** `GET /shipping/options`, cart `shipping` object, optional `shippingOptionId` on checkout initiate; `standard` and `express` catalog.
+- **Tax:** `totals.taxBreakdown` with jurisdiction rules (default, `DE`, `GB`); checkout uses shipping country.
+- **Discounts:** `POST /cart/discount`, seed promos `SAVE10` / `WELCOME5`, optional `discountCode` on checkout; `totals.discount` is computed.
+- **Discovery:** `/detect` `capabilities` block and commerce feature flags.
+- **Schemas:** `ShippingOption`, `TaxBreakdown`, `Applied Discount`, `CartDiscountRequest`, `ShippingOptionsResponse`.
+- **Conformance:** `conformance/cases/commerce.json` for filters, totals, discounts, and shipping.
+- **MCP:** `fastbuy_get_shipping_options`, `fastbuy_apply_discount`; typed filters with one-release legacy `minPrice`/`maxPrice`/`category` mapping.
+
+### Changed
+
+- **Totals pipeline:** Documented order of operations with `taxableBase` and `round2` half-up rounding (`src/commerce.js`, `src/python/commerce.py`).
+- **Versions:** Packages, OpenAPI, MCP, and `/detect` aligned at **0.4.0**.
+
 ## [0.3.0] - 2025-09-30
 
 ### Added

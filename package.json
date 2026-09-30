@@ -1,6 +1,6 @@
 {
   "name": "fast-buy-json",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "FastBuyJSON — a JSON-based standard for LLM agents talking to e-commerce APIs, plus a reference demo server and MCP implementation.",
   "license": "MIT",
   "type": "module",

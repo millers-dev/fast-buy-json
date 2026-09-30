@@ -142,8 +142,8 @@ def test_detect_spec_version(client):
     assert response.status_code == 200
     body = response.json()
     assert body["standard"] == "FastBuyJSON"
-    assert body["specVersion"] == "0.3.0"
-    assert body["implementationVersion"] == "0.3.0"
+    assert body["specVersion"] == "0.4.0"
+    assert body["implementationVersion"] == "0.4.0"
     assert response.headers.get("cache-control") == "public, max-age=300"
 
 
@@ -278,3 +278,46 @@ def test_idempotency_replayed_header(client):
     )
     assert replay.status_code == 200
     assert replay.headers.get("idempotency-replayed") == "true"
+
+
+def test_typed_filters_and_totals(client):
+    search = client.post(
+        "/api/fastbuyjson/products/search",
+        json={
+            "filters": {
+                "brand": "Acme",
+                "categories": ["Headphones"],
+                "priceRange": {"min": 90, "max": 210},
+            }
+        },
+    )
+    assert search.status_code == 200
+    assert search.json()["pagination"]["totalItems"] == 2
+
+    added = client.post(
+        "/api/fastbuyjson/cart/add",
+        json={"productId": "acme-wh-002", "quantity": 1},
+    )
+    totals = added.json()["cart"]["totals"]
+    assert totals["subtotal"] == 99.99
+    assert totals["shipping"] == 10
+    assert totals["tax"] == 10
+    assert totals["total"] == 119.99
+
+
+def test_discount_and_detect_capabilities(client):
+    client.post(
+        "/api/fastbuyjson/cart/add",
+        json={"productId": "acme-wh-002", "quantity": 1},
+    )
+    applied = client.post(
+        "/api/fastbuyjson/cart/discount", json={"code": "SAVE10"}
+    )
+    assert applied.status_code == 200
+    assert applied.json()["cart"]["totals"]["discount"] == 10
+
+    detect = client.get("/api/fastbuyjson/detect")
+    body = detect.json()
+    assert body["specVersion"] == "0.4.0"
+    assert "capabilities" in body
+    assert "discounts" in body["supportedFeatures"]
