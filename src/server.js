@@ -24,8 +24,17 @@ import {
   lookupIdempotency,
   storeIdempotency,
 } from "./idempotency.js";
+import {
+  DEFAULT_CURRENCY,
+  applyProductFilters,
+  buildDetectCapabilities,
+  buildShippingOptionViews,
+  lookupPromo,
+  recomputeCartTotals,
+  SHIPPING_CATALOG,
+} from "./commerce.js";
 
-const SPEC_VERSION = "0.3.0";
+const SPEC_VERSION = "0.4.0";
 
 // Mock database
 const db = {
@@ -182,28 +191,6 @@ function idempotencyMiddleware(req, res, next) {
 
 function requestUserId(req) {
   return req.userId || "anonymous";
-}
-
-function recomputeCartTotals(cart) {
-  for (const item of cart.items) {
-    item.lineTotal = {
-      amount: item.price.amount * item.quantity,
-      currency: item.price.currency,
-    };
-  }
-  cart.updated = new Date().toISOString();
-  const subtotal = cart.items.reduce((sum, item) => sum + item.lineTotal.amount, 0);
-  cart.totals.subtotal = subtotal;
-  cart.totals.tax = subtotal * 0.1;
-  cart.totals.shipping = subtotal > 100 ? 0 : 10;
-  if (cart.totals.discount === undefined) {
-    cart.totals.discount = 0;
-  }
-  cart.totals.total =
-    cart.totals.subtotal +
-    cart.totals.tax +
-    cart.totals.shipping -
-    (cart.totals.discount || 0);
 }
 
 function getCartForUser(userId) {
@@ -414,8 +401,13 @@ apiRouter.get("/detect", (req, res) => {
       "authentication",
       "anonymous_cart",
       "guest_checkout",
+      "typed_filters",
+      "shipping_selection",
+      "tax_breakdown",
+      "discounts",
     ],
-    endpoints: ["products", "cart", "checkout", "orders", "auth"],
+    capabilities: buildDetectCapabilities(),
+    endpoints: ["products", "cart", "checkout", "orders", "auth", "shipping"],
     authentication: {
       methods: ["jwt", "certificate", "anonymous"],
       endpoints: ["/auth/login", "/auth/refresh", "/auth/certificate"],
@@ -451,15 +443,8 @@ apiRouter.post("/products/search", optionalJwtMiddleware, (req, res) => {
     );
   }
 
-  // Apply filters
   if (filters) {
-    if (filters.brand) {
-      results = results.filter(
-        (product) => product.brand.toLowerCase() === filters.brand.toLowerCase()
-      );
-    }
-
-    // Add more filter handling as needed
+    results = applyProductFilters(results, filters);
   }
 
   if (sort) {
@@ -531,13 +516,19 @@ apiRouter.post("/cart/add", optionalJwtMiddleware, idempotencyMiddleware, (req, 
       items: [],
       created: new Date().toISOString(),
       updated: new Date().toISOString(),
+      appliedPromoCode: null,
+      appliedDiscounts: [],
+      shipping: { selectedOptionId: "standard" },
       totals: {
+        currency: DEFAULT_CURRENCY,
         subtotal: 0,
+        discount: 0,
         tax: 0,
         shipping: 0,
         total: 0,
       },
     };
+    recomputeCartTotals(db.carts[userId]);
   }
 
   const cart = db.carts[userId];
@@ -705,16 +696,63 @@ apiRouter.delete("/cart", optionalJwtMiddleware, (req, res) => {
   }
 
   cart.items = [];
-  cart.totals = {
-    subtotal: 0,
-    tax: 0,
-    shipping: 0,
-    discount: 0,
-    total: 0,
-  };
-  cart.updated = new Date().toISOString();
+  cart.appliedPromoCode = null;
+  cart.appliedDiscounts = [];
+  cart.shipping = { selectedOptionId: "standard" };
+  recomputeCartTotals(cart);
 
   res.json({ cart });
+});
+
+/**
+ * List shipping options (amounts reflect current cart taxable base when present)
+ */
+apiRouter.get("/shipping/options", optionalJwtMiddleware, (req, res) => {
+  const userId = requestUserId(req);
+  const cart = getCartForUser(userId);
+  let taxableBase = 0;
+  if (cart) {
+    recomputeCartTotals(cart);
+    taxableBase = cart.totals.taxableBase ?? 0;
+  }
+
+  res.json({
+    currency: DEFAULT_CURRENCY,
+    options: buildShippingOptionViews(taxableBase),
+  });
+});
+
+/**
+ * Apply or clear a cart discount code
+ */
+apiRouter.post("/cart/discount", optionalJwtMiddleware, (req, res) => {
+  const cart = requireCart(req, res);
+  if (!cart) {
+    return;
+  }
+
+  const { code } = req.body ?? {};
+
+  if (code === null || code === undefined || code === "") {
+    cart.appliedPromoCode = null;
+    recomputeCartTotals(cart);
+    return res.json({ cart, message: "Discount cleared" });
+  }
+
+  const promo = lookupPromo(code);
+  if (!promo) {
+    return sendProblem(res, {
+      status: 422,
+      code: "INVALID_DISCOUNT_CODE",
+      title: "Invalid discount code",
+      detail: `No promotion matches code ${code}`,
+      instance: req.path,
+    });
+  }
+
+  cart.appliedPromoCode = promo.code;
+  recomputeCartTotals(cart);
+  res.json({ cart, message: "Discount applied" });
 });
 
 /**
@@ -748,7 +786,14 @@ apiRouter.post(
   optionalJwtMiddleware,
   idempotencyMiddleware,
   (req, res) => {
-  const { cartId, shippingAddress, billingAddress, customerInfo } = req.body;
+  const {
+    cartId,
+    shippingAddress,
+    billingAddress,
+    customerInfo,
+    shippingOptionId,
+    discountCode,
+  } = req.body;
   const userId = requestUserId(req);
 
   // Validate cart exists
@@ -829,6 +874,40 @@ apiRouter.post(
       ],
     });
   }
+
+  const cart = db.carts[userId];
+
+  if (discountCode !== undefined && discountCode !== null && discountCode !== "") {
+    const promo = lookupPromo(discountCode);
+    if (!promo) {
+      return sendProblem(res, {
+        status: 422,
+        code: "INVALID_DISCOUNT_CODE",
+        title: "Invalid discount code",
+        detail: `No promotion matches code ${discountCode}`,
+        instance: req.path,
+      });
+    }
+    cart.appliedPromoCode = promo.code;
+  }
+
+  if (shippingOptionId) {
+    const option = SHIPPING_CATALOG.find((entry) => entry.id === shippingOptionId);
+    if (!option) {
+      return sendProblem(res, {
+        status: 400,
+        code: "VALIDATION_ERROR",
+        title: "Validation failed",
+        detail: "Unknown shippingOptionId",
+        instance: req.path,
+        errors: [{ field: "shippingOptionId", message: "Must be a known shipping option" }],
+      });
+    }
+    cart.shipping = cart.shipping || { selectedOptionId: "standard" };
+    cart.shipping.selectedOptionId = shippingOptionId;
+  }
+
+  recomputeCartTotals(cart, { taxCountry: shippingAddress.country });
 
   const sessionToken = uuidv4();
   const verificationToken = uuidv4();

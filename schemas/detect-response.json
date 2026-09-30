@@ -8,6 +8,7 @@
         "specVersion",
         "implementationVersion",
         "supportedFeatures",
+        "capabilities",
         "endpoints"
     ],
     "properties": {
@@ -22,14 +23,54 @@
             "type": "string",
             "description": "FastBuyJSON specification version",
             "examples": [
-                "0.3.0"
+                "0.4.0"
             ]
         },
         "implementationVersion": {
             "type": "string",
             "description": "Server implementation version",
             "examples": [
-                "0.3.0"
+                "0.4.0"
+            ]
+        },
+        "capabilities": {
+            "type": "object",
+            "description": "Structured commerce capability descriptor",
+            "additionalProperties": true,
+            "examples": [
+                {
+                    "filters": {
+                        "fields": [
+                            "brand",
+                            "categories",
+                            "priceRange",
+                            "availability",
+                            "extensions"
+                        ],
+                        "additionalProperties": true
+                    },
+                    "shipping": {
+                        "options": [
+                            "standard",
+                            "express"
+                        ],
+                        "freeShippingThreshold": {
+                            "amount": 100,
+                            "currency": "USD"
+                        }
+                    },
+                    "tax": {
+                        "mode": "jurisdiction",
+                        "defaultRate": 0.1
+                    },
+                    "discounts": {
+                        "types": [
+                            "percentage",
+                            "fixed"
+                        ],
+                        "stackable": false
+                    }
+                }
             ]
         },
         "supportedFeatures": {

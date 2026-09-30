@@ -1,0 +1,138 @@
+{
+  "suite": "commerce",
+  "scenarios": [
+    {
+      "name": "detect advertises commerce capabilities at 0.4.0",
+      "steps": [
+        {
+          "request": { "method": "GET", "path": "/detect" },
+          "expect": {
+            "status": 200,
+            "body": {
+              "specVersion": "0.4.0",
+              "implementationVersion": "0.4.0"
+            }
+          },
+          "capture": {}
+        }
+      ]
+    },
+    {
+      "name": "typed filters return Acme headphones in price range",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/products/search",
+            "body": {
+              "filters": {
+                "brand": "Acme",
+                "categories": ["Headphones"],
+                "priceRange": { "min": 90, "max": 210 }
+              }
+            }
+          },
+          "expect": {
+            "status": 200,
+            "body": {
+              "pagination.totalItems": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "default shipping and tax match pre-0.4 formula for single lite item",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "body": { "productId": "acme-wh-002", "quantity": 1 }
+          },
+          "expect": { "status": 200 },
+          "capture": { "cartId": "cart.id" }
+        },
+        {
+          "request": { "method": "GET", "path": "/cart" },
+          "expect": {
+            "status": 200,
+            "body": {
+              "cart.totals.subtotal": 99.99,
+              "cart.totals.discount": 0,
+              "cart.totals.shipping": 10,
+              "cart.totals.tax": 10,
+              "cart.totals.total": 119.99,
+              "cart.shipping.selectedOptionId": "standard"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "SAVE10 discount reduces totals",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "body": { "productId": "acme-wh-002", "quantity": 1 }
+          },
+          "expect": { "status": 200 }
+        },
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/discount",
+            "body": { "code": "SAVE10" }
+          },
+          "expect": {
+            "status": 200,
+            "body": {
+              "cart.totals.discount": 10,
+              "cart.totals.taxableBase": 89.99
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid discount returns 422",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "body": { "productId": "acme-wh-002", "quantity": 1 }
+          },
+          "expect": { "status": 200 }
+        },
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/discount",
+            "body": { "code": "NOTREAL" }
+          },
+          "expect": {
+            "status": 422,
+            "body": { "code": "INVALID_DISCOUNT_CODE" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "shipping options discovery",
+      "steps": [
+        {
+          "request": { "method": "GET", "path": "/shipping/options" },
+          "expect": {
+            "status": 200,
+            "body": {
+              "currency": "USD"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

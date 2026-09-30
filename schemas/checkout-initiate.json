@@ -175,6 +175,20 @@
                 }
             }
         },
+        "shippingOptionId": {
+            "type": "string",
+            "description": "Shipping option to use for this checkout (defaults to cart selection or standard)",
+            "examples": [
+                "express"
+            ]
+        },
+        "discountCode": {
+            "type": "string",
+            "description": "Optional promo code to apply before totals are finalized",
+            "examples": [
+                "SAVE10"
+            ]
+        },
         "extensions": {
             "type": "object",
             "description": "Additional custom fields",

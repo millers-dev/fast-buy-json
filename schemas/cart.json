@@ -102,10 +102,68 @@
                 }
             }
         },
+        "shipping": {
+            "type": "object",
+            "description": "Selected shipping option and catalog snapshot",
+            "properties": {
+                "selectedOptionId": {
+                    "type": "string",
+                    "examples": [
+                        "standard"
+                    ]
+                },
+                "amount": {
+                    "type": "object",
+                    "required": [
+                        "amount",
+                        "currency"
+                    ],
+                    "properties": {
+                        "amount": {
+                            "type": "number"
+                        },
+                        "currency": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                }
+            }
+        },
+        "appliedDiscounts": {
+            "type": "array",
+            "description": "Non-stackable discounts currently applied",
+            "items": {
+                "type": "object"
+            }
+        },
         "totals": {
             "type": "object",
             "properties": {
+                "currency": {
+                    "type": "string",
+                    "examples": [
+                        "USD"
+                    ]
+                },
                 "subtotal": {
+                    "type": "number",
+                    "examples": [
+                        399.98
+                    ]
+                },
+                "discount": {
+                    "type": "number",
+                    "examples": [
+                        0
+                    ]
+                },
+                "taxableBase": {
                     "type": "number",
                     "examples": [
                         399.98
@@ -117,11 +175,37 @@
                         39.99
                     ]
                 },
+                "taxBreakdown": {
+                    "type": "object",
+                    "properties": {
+                        "rate": {
+                            "type": "number"
+                        },
+                        "taxableAmount": {
+                            "type": "number"
+                        },
+                        "amount": {
+                            "type": "number"
+                        },
+                        "label": {
+                            "type": "string"
+                        },
+                        "jurisdiction": {
+                            "type": "string"
+                        }
+                    }
+                },
                 "shipping": {
                     "type": "number",
                     "examples": [
                         0
                     ]
+                },
+                "discountBreakdown": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
                 },
                 "total": {
                     "type": "number",
