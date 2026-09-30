@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-09-30
+
+### Added
+
+- **Runtime request validation:** Node (`ajv` + `ajv-formats`) and Python (`jsonschema` Draft 07) middleware loading `schemas/*.json`; conformance `validation.json` scenarios.
+- **TypeScript SDK:** `@fastbuyjson/sdk` at `sdk/typescript/` with schema-generated types and hand-written `FastBuyClient` / `FastBuyProblemError`.
+- **OpenAPI response examples:** `scripts/capture_examples.mjs` → `examples/responses/` injected by `build_openapi.py` (CI drift checks).
+- **MCP CI:** `mcp:test` runs in-process adapter integration tests via `node --test`.
+
+### Changed
+
+- **MCP filters:** Removed legacy `minPrice` / `maxPrice` / `category` mapping (typed `priceRange` / `categories[]` only).
+- **OpenAPI build:** JSON Schema `type: [string, null]` converted to `nullable: true` for OAS 3.0.
+- **Versions:** Packages, OpenAPI, MCP, SDK, and `/detect` aligned at **0.5.0**.
+
 ## [0.4.0] - 2025-09-30
 
 ### Added

@@ -16,17 +16,11 @@ import axios, {
 export interface SearchFilters {
   brand?: string;
   categories?: string[];
-  /** @deprecated use categories[] */
-  category?: string;
   priceRange?: {
     min?: number;
     max?: number;
     currency?: string;
   };
-  /** @deprecated use priceRange */
-  minPrice?: number;
-  /** @deprecated use priceRange */
-  maxPrice?: number;
   availability?: string[];
   extensions?: Record<string, unknown>;
 }
@@ -52,17 +46,10 @@ export function normalizeSearchFilters(filters?: SearchFilters): Record<string, 
 
   if (filters.categories?.length) {
     normalized.categories = filters.categories;
-  } else if (filters.category) {
-    normalized.categories = [filters.category];
   }
 
   if (filters.priceRange) {
     normalized.priceRange = filters.priceRange;
-  } else if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
-    normalized.priceRange = {
-      ...(filters.minPrice !== undefined ? { min: filters.minPrice } : {}),
-      ...(filters.maxPrice !== undefined ? { max: filters.maxPrice } : {}),
-    };
   }
 
   if (filters.availability?.length) {
@@ -134,12 +121,13 @@ export class FastBuyJSONAdapter {
   private client: AxiosInstance;
   private baseUrl: string;
   private userAgent: string;
-  private sessionToken?: string;
+  private authToken?: string;
+  private checkoutSessionToken?: string;
   private cartId?: string;
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl || process.env.FASTBUYJSON_API_URL || 'http://localhost:3000/api/fastbuyjson';
-    this.userAgent = 'FastBuyJSON-MCP-Server/0.4.0';
+    this.userAgent = 'FastBuyJSON-MCP-Server/0.5.0';
     
     this.client = axios.create({
       baseURL: this.baseUrl,
@@ -153,8 +141,8 @@ export class FastBuyJSONAdapter {
 
     // Add request interceptor for authentication
     this.client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-      if (this.sessionToken) {
-        config.headers['Authorization'] = `Bearer ${this.sessionToken}`;
+      if (this.authToken) {
+        config.headers['Authorization'] = `Bearer ${this.authToken}`;
       }
       
       // Add MCP context headers
@@ -170,7 +158,7 @@ export class FastBuyJSONAdapter {
       (error: AxiosError) => {
         if (error.response?.status === 401) {
           // Clear invalid session token
-          this.sessionToken = undefined;
+          this.authToken = undefined;
         }
         throw error;
       }
@@ -189,7 +177,7 @@ export class FastBuyJSONAdapter {
    * Set authentication token
    */
   setAuthToken(token: string): void {
-    this.sessionToken = token;
+    this.authToken = token;
   }
 
   /**
@@ -343,7 +331,7 @@ export class FastBuyJSONAdapter {
 
       // Store session token for checkout confirmation
       if (response.data.sessionToken) {
-        this.sessionToken = response.data.sessionToken;
+        this.checkoutSessionToken = response.data.sessionToken;
       }
 
       return response.data;
@@ -357,13 +345,14 @@ export class FastBuyJSONAdapter {
    */
   async confirmCheckout(params: CheckoutConfirmParams): Promise<any> {
     try {
+      const sessionToken = params.sessionToken || this.checkoutSessionToken;
       const response = await this.client.post('/checkout/confirm', {
-        sessionToken: params.sessionToken,
+        sessionToken,
         paymentDetails: params.paymentDetails,
       });
 
-      // Clear session token and cart ID after successful order
-      this.sessionToken = undefined;
+      // Clear checkout session and cart ID after successful order
+      this.checkoutSessionToken = undefined;
       this.cartId = undefined;
 
       return response.data;
@@ -395,7 +384,7 @@ export class FastBuyJSONAdapter {
       });
 
       if (response.data.access_token) {
-        this.sessionToken = response.data.access_token;
+        this.authToken = response.data.access_token;
       }
 
       return response.data;
@@ -408,7 +397,8 @@ export class FastBuyJSONAdapter {
    * Clear session data
    */
   clearSession(): void {
-    this.sessionToken = undefined;
+    this.authToken = undefined;
+    this.checkoutSessionToken = undefined;
     this.cartId = undefined;
   }
 }

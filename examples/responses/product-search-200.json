@@ -1,0 +1,104 @@
+{
+  "results": [
+    {
+      "id": "acme-wh-001",
+      "name": "ACME Wireless Headphones Pro",
+      "brand": "Acme",
+      "description": "Premium wireless headphones with noise cancellation",
+      "price": {
+        "amount": 199.99,
+        "currency": "USD"
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 42
+      },
+      "categories": [
+        "Electronics",
+        "Audio",
+        "Headphones"
+      ],
+      "images": [
+        {
+          "url": "https://example.com/images/acme-wh-001-main.jpg",
+          "alt": "ACME Wireless Headphones Pro - Black"
+        }
+      ],
+      "variants": [
+        {
+          "id": "acme-wh-001-black",
+          "attributes": {
+            "color": "black"
+          },
+          "price": {
+            "amount": 199.99,
+            "currency": "USD"
+          }
+        },
+        {
+          "id": "acme-wh-001-white",
+          "attributes": {
+            "color": "white"
+          },
+          "price": {
+            "amount": 199.99,
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "acme-wh-002",
+      "name": "ACME Wireless Headphones Lite",
+      "brand": "Acme",
+      "description": "Lightweight wireless headphones for everyday use",
+      "price": {
+        "amount": 99.99,
+        "currency": "USD"
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 78
+      },
+      "categories": [
+        "Electronics",
+        "Audio",
+        "Headphones"
+      ],
+      "images": [
+        {
+          "url": "https://example.com/images/acme-wh-002-main.jpg",
+          "alt": "ACME Wireless Headphones Lite - Silver"
+        }
+      ],
+      "variants": [
+        {
+          "id": "acme-wh-002-silver",
+          "attributes": {
+            "color": "silver"
+          },
+          "price": {
+            "amount": 99.99,
+            "currency": "USD"
+          }
+        },
+        {
+          "id": "acme-wh-002-blue",
+          "attributes": {
+            "color": "blue"
+          },
+          "price": {
+            "amount": 109.99,
+            "currency": "USD"
+          }
+        }
+      ]
+    }
+  ],
+  "pagination": {
+    "currentPage": 1,
+    "pageSize": 2,
+    "totalItems": 2,
+    "totalPages": 1
+  }
+}

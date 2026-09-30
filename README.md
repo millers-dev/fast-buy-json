@@ -4,7 +4,7 @@ FastBuyJSON is a JSON-based contract for LLM agents talking to e-commerce APIs. 
 
 This repository is the **open-source standard plus a reference implementation**. Recovered and restored from local editor history after the working tree was deleted.
 
-**Release:** `0.1.0` — recovered baseline (schemas, demo servers, MCP, Postman, schema CI). Not a stable 1.0 contract; `/detect` reports `standard` and `implementationVersion` as **FastBuyJSON 0.1.0** / `0.1.0`.
+**Release:** `0.5.0` — runtime request validation, TypeScript SDK (`sdk/typescript/`), OpenAPI response examples, and MCP integration tests in CI. See [`CHANGELOG.md`](CHANGELOG.md).
 
 ## What is in this repo
 
@@ -13,7 +13,8 @@ fast-buy-json/
 ├── openapi/base.yaml            # Hand-authored paths/responses (no schemas)
 ├── openapi/fastbuyjson.yaml   # Generated OpenAPI (do not edit by hand)
 ├── schemas/                   # JSON Schema (draft-07) — single source of truth
-├── examples/                  # Sample request payloads
+├── examples/                  # Sample request/response payloads
+├── sdk/typescript/            # @fastbuyjson/sdk (ESM, zero runtime deps)
 ├── src/server.js              # Node.js demo API
 ├── src/python/                # FastAPI demo API (same contract)
 ├── mcp-server/                # Reference MCP server for Claude Desktop
@@ -93,14 +94,28 @@ See [`mcp-server/README.md`](mcp-server/README.md) and [`mcp-server/EXAMPLES.md`
 ```bash
 pip install -r requirements.txt
 python scripts/validate_schemas.py
+node scripts/capture_examples.mjs
 python scripts/build_openapi.py --check
+node scripts/capture_examples.mjs --check
 openapi-spec-validator openapi/fastbuyjson.yaml
 python scripts/check_versions.py
 npm test
-python -m pytest tests/test_python_server.py
+python -m pytest tests/test_python_server.py conformance/harness/python
+npm run sdk:install && npm run check:sdk-types
+npm run mcp:test
 ```
 
 CI runs these gates on every pull request.
+
+## TypeScript SDK
+
+```bash
+npm run sdk:install
+npm run sdk:generate-types
+npm --prefix sdk/typescript run build
+```
+
+Import `@fastbuyjson/sdk` from `sdk/typescript/` (local path; not published to npm in 0.5.0).
 
 ## Recovery notes
 

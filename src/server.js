@@ -33,8 +33,9 @@ import {
   recomputeCartTotals,
   SHIPPING_CATALOG,
 } from "./commerce.js";
+import { validateBody } from "./validation.js";
 
-const SPEC_VERSION = "0.4.0";
+const SPEC_VERSION = "0.5.0";
 
 // Mock database
 const db = {
@@ -272,23 +273,8 @@ function calculateRiskScore(customerInfo, shippingAddress, cart) {
  * Login Endpoint
  * Authenticates a user and returns JWT tokens
  */
-apiRouter.post("/auth/login", (req, res) => {
+apiRouter.post("/auth/login", validateBody("login-request"), (req, res) => {
   const { username, password } = req.body;
-
-  // Validate required fields
-  if (!username || !password) {
-    return sendProblem(res, {
-      status: 400,
-      code: "VALIDATION_ERROR",
-      title: "Validation failed",
-      detail: "username and password are required",
-      instance: req.path,
-      errors: [
-        ...(!username ? [{ field: "username", message: "is required" }] : []),
-        ...(!password ? [{ field: "password", message: "is required" }] : []),
-      ],
-    });
-  }
 
   const user = authenticateUser(username, password);
   if (!user) {
@@ -316,20 +302,8 @@ apiRouter.post("/auth/login", (req, res) => {
  * Token Refresh Endpoint
  * Refreshes an expired JWT token
  */
-apiRouter.post("/auth/refresh", (req, res) => {
+apiRouter.post("/auth/refresh", validateBody("refresh-request"), (req, res) => {
   const { refresh_token } = req.body;
-
-  // Validate required fields
-  if (!refresh_token) {
-    return sendProblem(res, {
-      status: 400,
-      code: "VALIDATION_ERROR",
-      title: "Validation failed",
-      detail: "refresh_token is required",
-      instance: req.path,
-      errors: [{ field: "refresh_token", message: "is required" }],
-    });
-  }
 
   const result = refreshAccessToken(refresh_token);
   if (!result) {
@@ -353,20 +327,8 @@ apiRouter.post("/auth/refresh", (req, res) => {
  * Certificate Verification Endpoint
  * Verifies a client certificate and returns a session ID
  */
-apiRouter.post("/auth/certificate", (req, res) => {
+apiRouter.post("/auth/certificate", validateBody("certificate-request"), (req, res) => {
   const { certificate } = req.body;
-
-  // Validate required fields
-  if (!certificate) {
-    return sendProblem(res, {
-      status: 400,
-      code: "VALIDATION_ERROR",
-      title: "Validation failed",
-      detail: "certificate is required",
-      instance: req.path,
-      errors: [{ field: "certificate", message: "is required" }],
-    });
-  }
 
   const result = verifyCertificate(certificate);
   if (!result) {
@@ -427,7 +389,11 @@ apiRouter.get("/detect", (req, res) => {
  * Product Search Endpoint
  * Accepts search parameters and returns matching products
  */
-apiRouter.post("/products/search", optionalJwtMiddleware, (req, res) => {
+apiRouter.post(
+  "/products/search",
+  optionalJwtMiddleware,
+  validateBody("product-search"),
+  (req, res) => {
   const { query, filters, sort, page = 1, pageSize = 10 } = req.body;
 
   let results = [...db.products];
@@ -494,7 +460,12 @@ apiRouter.post("/products/search", optionalJwtMiddleware, (req, res) => {
  * Add to Cart Endpoint
  * Adds a product to the user's cart
  */
-apiRouter.post("/cart/add", optionalJwtMiddleware, idempotencyMiddleware, (req, res) => {
+apiRouter.post(
+  "/cart/add",
+  optionalJwtMiddleware,
+  validateBody("add-to-cart"),
+  idempotencyMiddleware,
+  (req, res) => {
   const { productId, quantity = 1, options = {} } = req.body;
 
   const product = db.products.find((p) => p.id === productId);
@@ -612,6 +583,7 @@ apiRouter.get("/cart", optionalJwtMiddleware, (req, res) => {
 apiRouter.patch(
   "/cart/items/:itemId",
   optionalJwtMiddleware,
+  validateBody("cart-update-item"),
   (req, res) => {
     const cart = requireCart(req, res);
     if (!cart) {
@@ -619,23 +591,7 @@ apiRouter.patch(
     }
 
     const { itemId } = req.params;
-    const { quantity } = req.body ?? {};
-
-    if (
-      quantity === undefined ||
-      typeof quantity !== "number" ||
-      !Number.isInteger(quantity) ||
-      quantity < 1
-    ) {
-      return sendProblem(res, {
-        status: 400,
-        code: "VALIDATION_ERROR",
-        title: "Validation failed",
-        detail: "quantity must be an integer greater than or equal to 1",
-        instance: req.path,
-        errors: [{ field: "quantity", message: "must be >= 1" }],
-      });
-    }
+    const { quantity } = req.body;
 
     const item = cart.items.find((line) => line.itemId === itemId);
     if (!item) {
@@ -725,7 +681,11 @@ apiRouter.get("/shipping/options", optionalJwtMiddleware, (req, res) => {
 /**
  * Apply or clear a cart discount code
  */
-apiRouter.post("/cart/discount", optionalJwtMiddleware, (req, res) => {
+apiRouter.post(
+  "/cart/discount",
+  optionalJwtMiddleware,
+  validateBody("cart-discount"),
+  (req, res) => {
   const cart = requireCart(req, res);
   if (!cart) {
     return;
@@ -784,6 +744,7 @@ apiRouter.get("/cart/:cartId", optionalJwtMiddleware, (req, res) => {
 apiRouter.post(
   "/checkout/initiate",
   optionalJwtMiddleware,
+  validateBody("checkout-initiate"),
   idempotencyMiddleware,
   (req, res) => {
   const {
@@ -807,73 +768,8 @@ apiRouter.post(
     });
   }
 
-  if (!customerInfo || !customerInfo.email) {
-    return sendProblem(res, {
-      status: 400,
-      code: "VALIDATION_ERROR",
-      title: "Validation failed",
-      detail: "Customer email and phone number are required",
-      instance: req.path,
-    });
-  }
-
   const phoneValue = customerInfo.phone || customerInfo.phoneNumber;
-  if (!phoneValue) {
-    return sendProblem(res, {
-      status: 400,
-      code: "VALIDATION_ERROR",
-      title: "Validation failed",
-      detail: "Customer email and phone number are required",
-      instance: req.path,
-    });
-  }
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(customerInfo.email)) {
-    return sendProblem(res, {
-      status: 400,
-      code: "VALIDATION_ERROR",
-      title: "Validation failed",
-      detail: "Invalid email format",
-      instance: req.path,
-      errors: [{ field: "customerInfo.email", message: "Invalid email format" }],
-    });
-  }
-
-  const phoneRegex = /^\+?[0-9\s\-\(\)]{8,20}$/;
-  if (!phoneRegex.test(phoneValue)) {
-    return sendProblem(res, {
-      status: 400,
-      code: "VALIDATION_ERROR",
-      title: "Validation failed",
-      detail: "Invalid phone number format",
-      instance: req.path,
-      errors: [{ field: "customerInfo.phone", message: "Invalid phone number format" }],
-    });
-  }
-
-  // Store normalized phone back
   customerInfo.phone = phoneValue;
-
-  // Validate addresses
-  if (
-    !shippingAddress ||
-    !shippingAddress.line1 ||
-    !shippingAddress.city ||
-    !shippingAddress.country ||
-    !shippingAddress.postalCode
-  ) {
-    return sendProblem(res, {
-      status: 400,
-      code: "VALIDATION_ERROR",
-      title: "Validation failed",
-      detail: "Invalid shipping address",
-      instance: req.path,
-      errors: [
-        { field: "shippingAddress", message: "line1, city, country, and postalCode are required" },
-      ],
-    });
-  }
 
   const cart = db.carts[userId];
 
@@ -949,6 +845,7 @@ apiRouter.post(
 apiRouter.post(
   "/checkout/confirm",
   optionalJwtMiddleware,
+  validateBody("checkout-confirm"),
   idempotencyMiddleware,
   (req, res) => {
   const { sessionToken, paymentDetails } = req.body;
@@ -979,36 +876,12 @@ apiRouter.post(
     });
   }
 
-  if (!paymentDetails || !paymentDetails.method) {
-    return sendProblem(res, {
-      status: 400,
-      code: "INVALID_PAYMENT_DETAILS",
-      title: "Invalid payment details",
-      detail: "payment method is required",
-      instance: req.path,
-    });
-  }
-
   if (paymentDetails.method === "cash_on_delivery") {
     return sendProblem(res, {
       status: 400,
       code: "PAYMENT_METHOD_UNSUPPORTED",
       title: "Payment method unsupported",
       detail: "Cash on delivery payments are not supported",
-      instance: req.path,
-    });
-  }
-
-  if (
-    !paymentDetails.transactionVerification ||
-    !paymentDetails.transactionVerification.verificationMethod ||
-    !paymentDetails.transactionVerification.verificationToken
-  ) {
-    return sendProblem(res, {
-      status: 400,
-      code: "VERIFICATION_REQUIRED",
-      title: "Verification required",
-      detail: "transactionVerification with verificationMethod and verificationToken is required",
       instance: req.path,
     });
   }

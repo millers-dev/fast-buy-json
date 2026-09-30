@@ -1,0 +1,82 @@
+{
+  "order": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "userId": "user1",
+    "status": "confirmed",
+    "items": [
+      {
+        "itemId": "00000000-0000-4000-8000-000000000002",
+        "productId": "acme-wh-001-black",
+        "name": "ACME Wireless Headphones Pro",
+        "quantity": 1,
+        "options": {
+          "color": "black"
+        },
+        "price": {
+          "amount": 199.99,
+          "currency": "USD"
+        },
+        "lineTotal": {
+          "amount": 199.99,
+          "currency": "USD"
+        }
+      }
+    ],
+    "totals": {
+      "currency": "USD",
+      "subtotal": 199.99,
+      "discount": 0,
+      "taxableBase": 199.99,
+      "tax": 38,
+      "taxBreakdown": {
+        "rate": 0.19,
+        "taxableAmount": 199.99,
+        "amount": 38,
+        "label": "VAT",
+        "jurisdiction": "DE"
+      },
+      "shipping": 0,
+      "discountBreakdown": [],
+      "total": 237.99
+    },
+    "customerInfo": {
+      "email": "customer@example.com",
+      "phone": "+49 30 12345678",
+      "firstName": "John",
+      "lastName": "Doe"
+    },
+    "shippingAddress": {
+      "line1": "123 Main St",
+      "city": "Berlin",
+      "country": "DE",
+      "postalCode": "10115"
+    },
+    "billingAddress": {
+      "line1": "123 Main St",
+      "city": "Berlin",
+      "country": "DE",
+      "postalCode": "10115"
+    },
+    "payment": {
+      "method": "credit_card",
+      "status": "approved",
+      "verificationMethod": "email_confirmation",
+      "verificationTimestamp": "2024-01-15T12:00:00.000Z",
+      "lastFourDigits": "4242",
+      "brand": "Visa"
+    },
+    "riskAssessment": {
+      "score": 10,
+      "verificationRequired": true
+    },
+    "created": "2024-01-15T12:00:00.000Z",
+    "fraudCheck": {
+      "status": "passed",
+      "score": 10,
+      "timestamp": "2024-01-15T12:00:00.000Z"
+    }
+  },
+  "orderId": "00000000-0000-4000-8000-000000000005",
+  "orderStatusUrl": "/api/fastbuyjson/orders/a1b5db9e-c4c8-44ac-8510-bd456ac411db",
+  "message": "Order confirmed successfully"
+}

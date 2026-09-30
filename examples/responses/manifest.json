@@ -1,0 +1,30 @@
+{
+  "GET /detect": {
+    "200": "detect-200.json"
+  },
+  "POST /auth/login": {
+    "200": "auth-login-200.json",
+    "400": "auth-login-400.json"
+  },
+  "POST /products/search": {
+    "200": "product-search-200.json"
+  },
+  "POST /cart/add": {
+    "200": "cart-add-200.json"
+  },
+  "GET /cart": {
+    "200": "cart-get-200.json"
+  },
+  "GET /shipping/options": {
+    "200": "shipping-options-200.json"
+  },
+  "POST /checkout/initiate": {
+    "200": "checkout-initiate-200.json"
+  },
+  "POST /checkout/confirm": {
+    "200": "checkout-confirm-200.json"
+  },
+  "GET /orders/{orderId}": {
+    "200": "order-status-200.json"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "type": "https://fastbuyjson.org/problems/validation-error",
+  "title": "Validation failed",
+  "status": 400,
+  "code": "VALIDATION_ERROR",
+  "detail": "Request validation failed",
+  "instance": "/auth/login",
+  "errors": [
+    {
+      "field": "password",
+      "message": "is required"
+    }
+  ]
+}

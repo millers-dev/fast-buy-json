@@ -3,7 +3,7 @@
 openapi: 3.0.3
 info:
   title: FastBuyJSON
-  version: 0.4.0
+  version: 0.5.0
   description: 'JSON contract for LLM agents talking to e-commerce APIs.
 
     All commerce endpoints live under `/api/fastbuyjson`.
@@ -48,6 +48,81 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetectResponse'
+              example:
+                standard: FastBuyJSON
+                specVersion: 0.5.0
+                implementationVersion: 0.5.0
+                supportedFeatures:
+                - idempotency
+                - pagination
+                - schema_validation
+                - authentication
+                - anonymous_cart
+                - guest_checkout
+                - typed_filters
+                - shipping_selection
+                - tax_breakdown
+                - discounts
+                capabilities:
+                  filters:
+                    fields:
+                    - brand
+                    - categories
+                    - priceRange
+                    - availability
+                    - extensions
+                    additionalProperties: true
+                  shipping:
+                    options:
+                    - standard
+                    - express
+                    freeShippingThreshold:
+                      amount: 100
+                      currency: USD
+                      appliesWhen: taxableBase > 100
+                      optionId: standard
+                  tax:
+                    mode: jurisdiction
+                    defaultRate: 0.1
+                    seededCountries:
+                    - DE
+                    - GB
+                    taxableBase: subtotal minus discount (shipping excluded)
+                  discounts:
+                    types:
+                    - percentage
+                    - fixed
+                    stackable: false
+                    promoCodes:
+                    - SAVE10
+                    - WELCOME5
+                endpoints:
+                - products
+                - cart
+                - checkout
+                - orders
+                - auth
+                - shipping
+                authentication:
+                  methods:
+                  - jwt
+                  - certificate
+                  - anonymous
+                  endpoints:
+                  - /auth/login
+                  - /auth/refresh
+                  - /auth/certificate
+                checkout:
+                  methods:
+                  - registered_user
+                  - guest_checkout
+                  verification:
+                  - email
+                  - phone
+                  - credit_card
+                merchantInfo:
+                  name: FastBuyJSON Demo Store
+                  url: https://example.com
   /auth/login:
     post:
       tags:
@@ -73,8 +148,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TokenResponse'
+              example:
+                access_token: canonical-access-token
+                refresh_token: canonical-refresh-token
+                token_type: bearer
+                expires_in: 3600
         '400':
           $ref: '#/components/responses/BadRequest'
+          content:
+            application/json:
+              example:
+                type: https://fastbuyjson.org/problems/validation-error
+                title: Validation failed
+                status: 400
+                code: VALIDATION_ERROR
+                detail: Request validation failed
+                instance: /auth/login
+                errors:
+                - field: password
+                  message: is required
         '401':
           $ref: '#/components/responses/Unauthorized'
   /auth/refresh:
@@ -158,6 +250,73 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductSearchResponse'
+              example:
+                results:
+                - id: acme-wh-001
+                  name: ACME Wireless Headphones Pro
+                  brand: Acme
+                  description: Premium wireless headphones with noise cancellation
+                  price:
+                    amount: 199.99
+                    currency: USD
+                  availability:
+                    status: in_stock
+                    quantity: 42
+                  categories:
+                  - Electronics
+                  - Audio
+                  - Headphones
+                  images:
+                  - url: https://example.com/images/acme-wh-001-main.jpg
+                    alt: ACME Wireless Headphones Pro - Black
+                  variants:
+                  - id: acme-wh-001-black
+                    attributes:
+                      color: black
+                    price:
+                      amount: 199.99
+                      currency: USD
+                  - id: acme-wh-001-white
+                    attributes:
+                      color: white
+                    price:
+                      amount: 199.99
+                      currency: USD
+                - id: acme-wh-002
+                  name: ACME Wireless Headphones Lite
+                  brand: Acme
+                  description: Lightweight wireless headphones for everyday use
+                  price:
+                    amount: 99.99
+                    currency: USD
+                  availability:
+                    status: in_stock
+                    quantity: 78
+                  categories:
+                  - Electronics
+                  - Audio
+                  - Headphones
+                  images:
+                  - url: https://example.com/images/acme-wh-002-main.jpg
+                    alt: ACME Wireless Headphones Lite - Silver
+                  variants:
+                  - id: acme-wh-002-silver
+                    attributes:
+                      color: silver
+                    price:
+                      amount: 99.99
+                      currency: USD
+                  - id: acme-wh-002-blue
+                    attributes:
+                      color: blue
+                    price:
+                      amount: 109.99
+                      currency: USD
+                pagination:
+                  currentPage: 1
+                  pageSize: 2
+                  totalItems: 2
+                  totalPages: 1
   /cart/add:
     post:
       tags:
@@ -188,6 +347,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CartResponse'
+              example:
+                cart:
+                  id: 00000000-0000-4000-8000-000000000001
+                  items:
+                  - itemId: 00000000-0000-4000-8000-000000000002
+                    productId: acme-wh-001-black
+                    name: ACME Wireless Headphones Pro
+                    quantity: 1
+                    options:
+                      color: black
+                    price:
+                      amount: 199.99
+                      currency: USD
+                    lineTotal:
+                      amount: 199.99
+                      currency: USD
+                  created: '2024-01-15T12:00:00.000Z'
+                  updated: '2024-01-15T12:00:00.000Z'
+                  appliedPromoCode: null
+                  appliedDiscounts: []
+                  shipping:
+                    selectedOptionId: standard
+                    amount:
+                      amount: 0
+                      currency: USD
+                    options:
+                    - id: standard
+                      label: Standard Shipping
+                      amount:
+                        amount: 0
+                        currency: USD
+                      estimatedDelivery:
+                        minDays: 3
+                        maxDays: 5
+                      freeOver:
+                        amount: 100
+                        currency: USD
+                      description: Delivered in 3–5 business days
+                    - id: express
+                      label: Express Shipping
+                      amount:
+                        amount: 25
+                        currency: USD
+                      estimatedDelivery:
+                        minDays: 1
+                        maxDays: 2
+                      description: Delivered in 1–2 business days
+                  totals:
+                    currency: USD
+                    subtotal: 199.99
+                    discount: 0
+                    taxableBase: 199.99
+                    tax: 20
+                    taxBreakdown:
+                      rate: 0.1
+                      taxableAmount: 199.99
+                      amount: 20
+                      label: default
+                      jurisdiction: default
+                    shipping: 0
+                    discountBreakdown: []
+                    total: 219.99
+                message: Item added to cart successfully
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -210,6 +432,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CartResponse'
+              example:
+                cart:
+                  id: 00000000-0000-4000-8000-000000000001
+                  items:
+                  - itemId: 00000000-0000-4000-8000-000000000002
+                    productId: acme-wh-001-black
+                    name: ACME Wireless Headphones Pro
+                    quantity: 1
+                    options:
+                      color: black
+                    price:
+                      amount: 199.99
+                      currency: USD
+                    lineTotal:
+                      amount: 199.99
+                      currency: USD
+                  created: '2024-01-15T12:00:00.000Z'
+                  updated: '2024-01-15T12:00:00.000Z'
+                  appliedPromoCode: null
+                  appliedDiscounts: []
+                  shipping:
+                    selectedOptionId: standard
+                    amount:
+                      amount: 0
+                      currency: USD
+                    options:
+                    - id: standard
+                      label: Standard Shipping
+                      amount:
+                        amount: 0
+                        currency: USD
+                      estimatedDelivery:
+                        minDays: 3
+                        maxDays: 5
+                      freeOver:
+                        amount: 100
+                        currency: USD
+                      description: Delivered in 3–5 business days
+                    - id: express
+                      label: Express Shipping
+                      amount:
+                        amount: 25
+                        currency: USD
+                      estimatedDelivery:
+                        minDays: 1
+                        maxDays: 2
+                      description: Delivered in 1–2 business days
+                  totals:
+                    currency: USD
+                    subtotal: 199.99
+                    discount: 0
+                    taxableBase: 199.99
+                    tax: 20
+                    taxBreakdown:
+                      rate: 0.1
+                      taxableAmount: 199.99
+                      amount: 20
+                      label: default
+                      jurisdiction: default
+                    shipping: 0
+                    discountBreakdown: []
+                    total: 219.99
         '404':
           $ref: '#/components/responses/NotFound'
     delete:
@@ -351,6 +635,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ShippingOptionsResponse'
+              example:
+                currency: USD
+                options:
+                - id: standard
+                  label: Standard Shipping
+                  amount:
+                    amount: 0
+                    currency: USD
+                  estimatedDelivery:
+                    minDays: 3
+                    maxDays: 5
+                  freeOver:
+                    amount: 100
+                    currency: USD
+                  description: Delivered in 3–5 business days
+                - id: express
+                  label: Express Shipping
+                  amount:
+                    amount: 25
+                    currency: USD
+                  estimatedDelivery:
+                    minDays: 1
+                    maxDays: 2
+                  description: Delivered in 1–2 business days
   /cart/{cartId}:
     get:
       tags:
@@ -406,6 +714,96 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CheckoutInitiateResponse'
+              example:
+                sessionToken: 00000000-0000-4000-8000-000000000003
+                verificationToken: 00000000-0000-4000-8000-000000000004
+                expiresAt: '2024-01-15T12:00:00.000Z'
+                cart:
+                  id: 00000000-0000-4000-8000-000000000001
+                  items:
+                  - itemId: 00000000-0000-4000-8000-000000000002
+                    productId: acme-wh-001-black
+                    name: ACME Wireless Headphones Pro
+                    quantity: 1
+                    options:
+                      color: black
+                    price:
+                      amount: 199.99
+                      currency: USD
+                    lineTotal:
+                      amount: 199.99
+                      currency: USD
+                  created: '2024-01-15T12:00:00.000Z'
+                  updated: '2024-01-15T12:00:00.000Z'
+                  appliedPromoCode: null
+                  appliedDiscounts: []
+                  shipping:
+                    selectedOptionId: standard
+                    amount:
+                      amount: 0
+                      currency: USD
+                    options:
+                    - id: standard
+                      label: Standard Shipping
+                      amount:
+                        amount: 0
+                        currency: USD
+                      estimatedDelivery:
+                        minDays: 3
+                        maxDays: 5
+                      freeOver:
+                        amount: 100
+                        currency: USD
+                      description: Delivered in 3–5 business days
+                    - id: express
+                      label: Express Shipping
+                      amount:
+                        amount: 25
+                        currency: USD
+                      estimatedDelivery:
+                        minDays: 1
+                        maxDays: 2
+                      description: Delivered in 1–2 business days
+                  totals:
+                    currency: USD
+                    subtotal: 199.99
+                    discount: 0
+                    taxableBase: 199.99
+                    tax: 38
+                    taxBreakdown:
+                      rate: 0.19
+                      taxableAmount: 199.99
+                      amount: 38
+                      label: VAT
+                      jurisdiction: DE
+                    shipping: 0
+                    discountBreakdown: []
+                    total: 237.99
+                  checkoutSession:
+                    sessionToken: 00000000-0000-4000-8000-000000000003
+                    verificationToken: 00000000-0000-4000-8000-000000000004
+                    expiresAt: '2024-01-15T12:00:00.000Z'
+                    shippingAddress:
+                      line1: 123 Main St
+                      city: Berlin
+                      country: DE
+                      postalCode: '10115'
+                    billingAddress:
+                      line1: 123 Main St
+                      city: Berlin
+                      country: DE
+                      postalCode: '10115'
+                    customerInfo:
+                      email: customer@example.com
+                      phone: +49 30 12345678
+                      firstName: John
+                      lastName: Doe
+                    riskAssessment:
+                      score: 10
+                      verificationRequired: true
+                riskAssessment:
+                  score: 10
+                  verificationRequired: true
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -441,6 +839,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CheckoutConfirmResponse'
+              example:
+                order:
+                  id: 00000000-0000-4000-8000-000000000001
+                  userId: user1
+                  status: confirmed
+                  items:
+                  - itemId: 00000000-0000-4000-8000-000000000002
+                    productId: acme-wh-001-black
+                    name: ACME Wireless Headphones Pro
+                    quantity: 1
+                    options:
+                      color: black
+                    price:
+                      amount: 199.99
+                      currency: USD
+                    lineTotal:
+                      amount: 199.99
+                      currency: USD
+                  totals:
+                    currency: USD
+                    subtotal: 199.99
+                    discount: 0
+                    taxableBase: 199.99
+                    tax: 38
+                    taxBreakdown:
+                      rate: 0.19
+                      taxableAmount: 199.99
+                      amount: 38
+                      label: VAT
+                      jurisdiction: DE
+                    shipping: 0
+                    discountBreakdown: []
+                    total: 237.99
+                  customerInfo:
+                    email: customer@example.com
+                    phone: +49 30 12345678
+                    firstName: John
+                    lastName: Doe
+                  shippingAddress:
+                    line1: 123 Main St
+                    city: Berlin
+                    country: DE
+                    postalCode: '10115'
+                  billingAddress:
+                    line1: 123 Main St
+                    city: Berlin
+                    country: DE
+                    postalCode: '10115'
+                  payment:
+                    method: credit_card
+                    status: approved
+                    verificationMethod: email_confirmation
+                    verificationTimestamp: '2024-01-15T12:00:00.000Z'
+                    lastFourDigits: '4242'
+                    brand: Visa
+                  riskAssessment:
+                    score: 10
+                    verificationRequired: true
+                  created: '2024-01-15T12:00:00.000Z'
+                  fraudCheck:
+                    status: passed
+                    score: 10
+                    timestamp: '2024-01-15T12:00:00.000Z'
+                orderId: 00000000-0000-4000-8000-000000000005
+                orderStatusUrl: /api/fastbuyjson/orders/02297a00-6fc8-4d27-a08c-3e9ea783bbc9
+                message: Order confirmed successfully
         '400':
           $ref: '#/components/responses/BadRequest'
         '409':
@@ -469,6 +933,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderStatusResponse'
+              example:
+                order:
+                  id: 00000000-0000-4000-8000-000000000001
+                  userId: user1
+                  status: confirmed
+                  items:
+                  - itemId: 00000000-0000-4000-8000-000000000002
+                    productId: acme-wh-001-black
+                    name: ACME Wireless Headphones Pro
+                    quantity: 1
+                    options:
+                      color: black
+                    price:
+                      amount: 199.99
+                      currency: USD
+                    lineTotal:
+                      amount: 199.99
+                      currency: USD
+                  totals:
+                    currency: USD
+                    subtotal: 199.99
+                    discount: 0
+                    taxableBase: 199.99
+                    tax: 38
+                    taxBreakdown:
+                      rate: 0.19
+                      taxableAmount: 199.99
+                      amount: 38
+                      label: VAT
+                      jurisdiction: DE
+                    shipping: 0
+                    discountBreakdown: []
+                    total: 237.99
+                  customerInfo:
+                    email: customer@example.com
+                    phone: +49 30 12345678
+                    firstName: John
+                    lastName: Doe
+                  shippingAddress:
+                    line1: 123 Main St
+                    city: Berlin
+                    country: DE
+                    postalCode: '10115'
+                  billingAddress:
+                    line1: 123 Main St
+                    city: Berlin
+                    country: DE
+                    postalCode: '10115'
+                  payment:
+                    method: credit_card
+                    status: approved
+                    verificationMethod: email_confirmation
+                    verificationTimestamp: '2024-01-15T12:00:00.000Z'
+                    lastFourDigits: '4242'
+                    brand: Visa
+                  riskAssessment:
+                    score: 10
+                    verificationRequired: true
+                  created: '2024-01-15T12:00:00.000Z'
+                  fraudCheck:
+                    status: passed
+                    score: 10
+                    timestamp: '2024-01-15T12:00:00.000Z'
         '404':
           $ref: '#/components/responses/NotFound'
 components:
@@ -1471,11 +1998,11 @@ components:
         specVersion:
           type: string
           description: FastBuyJSON specification version
-          example: 0.4.0
+          example: 0.5.0
         implementationVersion:
           type: string
           description: Server implementation version
-          example: 0.4.0
+          example: 0.5.0
         capabilities:
           type: object
           description: Structured commerce capability descriptor

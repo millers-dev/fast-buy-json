@@ -1,0 +1,96 @@
+{
+  "standard": "FastBuyJSON",
+  "specVersion": "0.5.0",
+  "implementationVersion": "0.5.0",
+  "supportedFeatures": [
+    "idempotency",
+    "pagination",
+    "schema_validation",
+    "authentication",
+    "anonymous_cart",
+    "guest_checkout",
+    "typed_filters",
+    "shipping_selection",
+    "tax_breakdown",
+    "discounts"
+  ],
+  "capabilities": {
+    "filters": {
+      "fields": [
+        "brand",
+        "categories",
+        "priceRange",
+        "availability",
+        "extensions"
+      ],
+      "additionalProperties": true
+    },
+    "shipping": {
+      "options": [
+        "standard",
+        "express"
+      ],
+      "freeShippingThreshold": {
+        "amount": 100,
+        "currency": "USD",
+        "appliesWhen": "taxableBase > 100",
+        "optionId": "standard"
+      }
+    },
+    "tax": {
+      "mode": "jurisdiction",
+      "defaultRate": 0.1,
+      "seededCountries": [
+        "DE",
+        "GB"
+      ],
+      "taxableBase": "subtotal minus discount (shipping excluded)"
+    },
+    "discounts": {
+      "types": [
+        "percentage",
+        "fixed"
+      ],
+      "stackable": false,
+      "promoCodes": [
+        "SAVE10",
+        "WELCOME5"
+      ]
+    }
+  },
+  "endpoints": [
+    "products",
+    "cart",
+    "checkout",
+    "orders",
+    "auth",
+    "shipping"
+  ],
+  "authentication": {
+    "methods": [
+      "jwt",
+      "certificate",
+      "anonymous"
+    ],
+    "endpoints": [
+      "/auth/login",
+      "/auth/refresh",
+      "/auth/certificate"
+    ]
+  },
+  "checkout": {
+    "methods": [
+      "registered_user",
+      "guest_checkout"
+    ],
+    "verification": [
+      "email",
+      "phone",
+      "credit_card"
+    ]
+  },
+  "merchantInfo": {
+    "name": "FastBuyJSON Demo Store",
+    "url": "https://example.com"
+  }
+}

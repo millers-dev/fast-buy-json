@@ -1,0 +1,35 @@
+{
+  "currency": "USD",
+  "options": [
+    {
+      "id": "standard",
+      "label": "Standard Shipping",
+      "amount": {
+        "amount": 0,
+        "currency": "USD"
+      },
+      "estimatedDelivery": {
+        "minDays": 3,
+        "maxDays": 5
+      },
+      "freeOver": {
+        "amount": 100,
+        "currency": "USD"
+      },
+      "description": "Delivered in 3–5 business days"
+    },
+    {
+      "id": "express",
+      "label": "Express Shipping",
+      "amount": {
+        "amount": 25,
+        "currency": "USD"
+      },
+      "estimatedDelivery": {
+        "minDays": 1,
+        "maxDays": 2
+      },
+      "description": "Delivered in 1–2 business days"
+    }
+  ]
+}

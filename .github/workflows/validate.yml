@@ -29,6 +29,9 @@ jobs:
       - name: Check OpenAPI drift
         run: python scripts/build_openapi.py --check
 
+      - name: Check response example drift
+        run: node scripts/capture_examples.mjs --check
+
       - name: Validate OpenAPI spec
         run: openapi-spec-validator openapi/fastbuyjson.yaml
 
@@ -47,13 +50,22 @@ jobs:
         run: npm install
 
       - name: Syntax-check demo server
-        run: node --check src/server.js && node --check src/commerce.js && node --check src/auth.js && node --check src/errors.js && node --check src/idempotency.js
+        run: node --check src/server.js && node --check src/commerce.js && node --check src/auth.js && node --check src/errors.js && node --check src/idempotency.js && node --check src/validation.js
 
       - name: Run Node API tests
         run: npm test
+
+      - name: Install SDK dependencies
+        run: npm run sdk:install
+
+      - name: Check SDK type generation drift
+        run: npm run check:sdk-types
 
       - name: Install MCP server dependencies
         run: npm run mcp:install
 
       - name: Build MCP server
         run: npm run mcp:build
+
+      - name: Run MCP tests
+        run: npm run mcp:test
