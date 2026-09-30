@@ -1,4 +1,4 @@
-# FastBuyJSON HTTP contract (0.5.0)
+# FastBuyJSON HTTP contract (1.0.0)
 
 This document describes the contract implemented by the reference Node and Python servers. The machine-readable spec is generated at [`openapi/fastbuyjson.yaml`](../openapi/fastbuyjson.yaml) from JSON Schemas in [`schemas/`](../schemas/).
 
@@ -135,13 +135,22 @@ Checkout session expiry remains in the JSON body (`expiresAt`, typically 1 hour)
 
 With no discount and `standard` shipping, reference servers reproduce pre-0.4 cart totals for the demo catalog.
 
-## Discovery capabilities (0.4.0)
+## Discovery capabilities (0.4.0+)
 
-`/detect` adds `capabilities` (filters, shipping, tax, discounts) and advertises `typed_filters`, `shipping_selection`, `tax_breakdown`, and `discounts` in `supportedFeatures`.
+`/detect` adds `capabilities` (filters, shipping, tax, discounts, extensions) and advertises commerce features in `supportedFeatures`.
 
-## Request validation (0.5.0)
+## Extensions & vendor data (1.0.0)
 
-Mutating and search endpoints validate JSON request bodies against `schemas/*.json` (Draft 07) in both reference servers before business rules run. Failures return **400** `VALIDATION_ERROR` with `errors[]`. Format assertions are limited to `uuid`, `email`, and `date-time` for Node/Python parity; `additionalProperties` remains open on request objects in 0.5.0.
+- **`extensions`** on requests (`/cart/add`, `/checkout/initiate`, `/checkout/confirm`, search filters) is an opaque object (`additionalProperties: true`). Reference servers **echo** client-provided `extensions` on cart and order resources; they never invent core keys inside `extensions`.
+- **Reserved namespaces:** `fastbuyjson`, `x-fastbuyjson`. Vendors should use reverse-DNS keys (e.g. `com.example`) or an `x-` prefix for custom fields.
+- **`filters.extensions`** is ignored for product matching (stability); it exists for forward-compatible client metadata.
+- **Forward compatibility:** Unknown top-level request properties must not cause `VALIDATION_ERROR`. See [`COMPATIBILITY.md`](COMPATIBILITY.md).
+
+Reference integrators may register extra shipping, promo, or tax entries via `src/extensions.js` / `src/python/extensions.py` (empty by default).
+
+## Request validation (0.5.0+)
+
+Mutating and search endpoints validate JSON request bodies against `schemas/*.json` (Draft 07) in both reference servers before business rules run. Failures return **400** `VALIDATION_ERROR` with `errors[]`. Format assertions are limited to `uuid`, `email`, and `date-time` for Node/Python parity; `additionalProperties` remains open on request objects in 1.x.
 
 | Method | Path | Schema file |
 |--------|------|-------------|
@@ -159,7 +168,8 @@ JWT and idempotency middleware run in the same order as before: optional JWT fir
 
 ## Versioning
 
-- OpenAPI `info.version`, packages, and `/detect` `specVersion` / `implementationVersion` are aligned at **0.5.0** for this release.
+- OpenAPI `info.version`, packages, and `/detect` `specVersion` / `implementationVersion` are aligned at **1.0.0** for this release.
+- SemVer policy for 1.x: [`COMPATIBILITY.md`](COMPATIBILITY.md).
 - `standard` in `/detect` is the string `FastBuyJSON` (not a versioned product name).
 
 ## Conformance

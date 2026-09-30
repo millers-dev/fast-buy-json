@@ -23,14 +23,14 @@
             "type": "string",
             "description": "FastBuyJSON specification version",
             "examples": [
-                "0.5.0"
+                "1.0.0"
             ]
         },
         "implementationVersion": {
             "type": "string",
             "description": "Server implementation version",
             "examples": [
-                "0.5.0"
+                "1.0.0"
             ]
         },
         "capabilities": {
@@ -69,6 +69,15 @@
                             "fixed"
                         ],
                         "stackable": false
+                    },
+                    "extensions": {
+                        "supported": true,
+                        "echo": true,
+                        "reservedNamespaces": [
+                            "fastbuyjson",
+                            "x-fastbuyjson"
+                        ],
+                        "vendorKeyConvention": "reverse-dns or x- prefix"
                     }
                 }
             ]

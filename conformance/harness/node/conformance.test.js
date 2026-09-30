@@ -43,6 +43,14 @@ function getByPath(obj, path) {
 
 function substitute(value, vars) {
   if (typeof value === "string") {
+    const full = value.match(/^\{\{(\w+)\}\}$/);
+    if (full) {
+      const name = full[1];
+      if (!(name in vars)) {
+        throw new Error(`Unknown template variable: ${name}`);
+      }
+      return vars[name];
+    }
     return value.replace(/\{\{(\w+)\}\}/g, (_, name) => {
       if (!(name in vars)) {
         throw new Error(`Unknown template variable: ${name}`);

@@ -179,12 +179,12 @@ test("rejects invalid bearer tokens", async () => {
   assert.match(headers["www-authenticate"] || "", /Bearer/i);
 });
 
-test("detect advertises specVersion 0.5.0", async () => {
+test("detect advertises specVersion 1.0.0", async () => {
   const { status, json, headers } = await request("GET", `${API}/detect`);
   assert.equal(status, 200);
   assert.equal(json.standard, "FastBuyJSON");
-  assert.equal(json.specVersion, "0.5.0");
-  assert.equal(json.implementationVersion, "0.5.0");
+  assert.equal(json.specVersion, "1.0.0");
+  assert.equal(json.implementationVersion, "1.0.0");
   assert.equal(headers["cache-control"], "public, max-age=300");
 });
 
@@ -338,10 +338,10 @@ test("discount apply and invalid code", async () => {
   expectProblem(bad.json, { status: 422, code: "INVALID_DISCOUNT_CODE" });
 });
 
-test("detect exposes capabilities at 0.5.0", async () => {
+test("detect exposes capabilities at 1.0.0", async () => {
   const { status, json } = await request("GET", `${API}/detect`);
   assert.equal(status, 200);
-  assert.equal(json.specVersion, "0.5.0");
+  assert.equal(json.specVersion, "1.0.0");
   assert.ok(json.capabilities?.shipping?.options?.includes("express"));
   assert.ok(json.supportedFeatures.includes("discounts"));
 });

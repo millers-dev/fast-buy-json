@@ -31,16 +31,22 @@ from idempotency import (
 )
 from commerce import (
     DEFAULT_CURRENCY,
-    SHIPPING_CATALOG,
     apply_product_filters,
     build_detect_capabilities,
     build_shipping_option_views,
+    find_shipping_option,
     lookup_promo,
     recompute_cart_totals,
 )
 from validation import read_validated_json, validate_payload
 
-SPEC_VERSION = "0.5.0"
+SPEC_VERSION = "1.0.0"
+
+
+def _echo_extensions(value: Any) -> Optional[Dict[str, Any]]:
+    if value is None or not isinstance(value, dict):
+        return None
+    return copy.deepcopy(value)
 
 app = FastAPI(
     title="FastBuyJSON Demo API",
@@ -475,6 +481,8 @@ async def add_to_cart(
     product_id = data.get("productId")
     quantity = data.get("quantity", 1)
     options = data.get("options", {})
+    extensions = data.get("extensions")
+    echoed_extensions = _echo_extensions(extensions)
 
     product = next((p for p in DB["products"] if p["id"] == product_id), None)
     if not product:
@@ -519,12 +527,17 @@ async def add_to_cart(
         None,
     )
 
+    if echoed_extensions is not None:
+        cart["extensions"] = echoed_extensions
+
     if existing_item:
         # Update quantity if item exists
         existing_item["quantity"] += quantity
         existing_item["lineTotal"]["amount"] = (
             existing_item["price"]["amount"] * existing_item["quantity"]
         )
+        if echoed_extensions is not None:
+            existing_item["extensions"] = echoed_extensions
     else:
         # Add new item if it doesn't exist
         variant = product
@@ -547,20 +560,21 @@ async def add_to_cart(
                     "price": matching_variant["price"],
                 }
 
-        cart["items"].append(
-            {
-                "itemId": str(uuid4()),
-                "productId": variant["id"],
-                "name": product["name"],
-                "quantity": quantity,
-                "options": options,
-                "price": variant["price"],
-                "lineTotal": {
-                    "amount": variant["price"]["amount"] * quantity,
-                    "currency": variant["price"]["currency"],
-                },
-            }
-        )
+        line_item = {
+            "itemId": str(uuid4()),
+            "productId": variant["id"],
+            "name": product["name"],
+            "quantity": quantity,
+            "options": options,
+            "price": variant["price"],
+            "lineTotal": {
+                "amount": variant["price"]["amount"] * quantity,
+                "currency": variant["price"]["currency"],
+            },
+        }
+        if echoed_extensions is not None:
+            line_item["extensions"] = echoed_extensions
+        cart["items"].append(line_item)
 
     recompute_cart_totals(cart)
 
@@ -760,8 +774,12 @@ async def initiate_checkout(
             )
         cart["appliedPromoCode"] = promo["code"]
 
+    checkout_extensions = _echo_extensions(data.get("extensions"))
+    if checkout_extensions is not None:
+        cart["extensions"] = checkout_extensions
+
     if shipping_option_id:
-        if not any(option["id"] == shipping_option_id for option in SHIPPING_CATALOG):
+        if find_shipping_option(shipping_option_id) is None:
             raise ProblemException(
                 status_code=400,
                 code="VALIDATION_ERROR",
@@ -788,7 +806,7 @@ async def initiate_checkout(
 
     risk_score = calculate_risk_score(customer_info, shipping_address, cart)
 
-    DB["checkout_sessions"][session_token] = {
+    session_record = {
         "userId": user_id,
         "cartId": cart_id,
         "verificationToken": verification_token,
@@ -798,6 +816,9 @@ async def initiate_checkout(
         "customerInfo": customer_info,
         "riskAssessment": {"score": risk_score, "verificationRequired": True},
     }
+    if checkout_extensions is not None:
+        session_record["extensions"] = checkout_extensions
+    DB["checkout_sessions"][session_token] = session_record
 
     payload = {
         "sessionToken": session_token,
@@ -950,6 +971,10 @@ async def confirm_checkout(
             "timestamp": datetime.now().isoformat(),
         },
     }
+
+    session_extensions = session.get("extensions")
+    if session_extensions is not None:
+        order["extensions"] = copy.deepcopy(session_extensions)
 
     # Store order
     DB["orders"][order_id] = order

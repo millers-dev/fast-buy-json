@@ -142,8 +142,8 @@ def test_detect_spec_version(client):
     assert response.status_code == 200
     body = response.json()
     assert body["standard"] == "FastBuyJSON"
-    assert body["specVersion"] == "0.5.0"
-    assert body["implementationVersion"] == "0.5.0"
+    assert body["specVersion"] == "1.0.0"
+    assert body["implementationVersion"] == "1.0.0"
     assert response.headers.get("cache-control") == "public, max-age=300"
 
 
@@ -318,6 +318,6 @@ def test_discount_and_detect_capabilities(client):
 
     detect = client.get("/api/fastbuyjson/detect")
     body = detect.json()
-    assert body["specVersion"] == "0.5.0"
+    assert body["specVersion"] == "1.0.0"
     assert "capabilities" in body
     assert "discounts" in body["supportedFeatures"]

@@ -1,0 +1,168 @@
+{
+  "suite": "extensions",
+  "scenarios": [
+    {
+      "name": "detect advertises extensions capability",
+      "steps": [
+        {
+          "request": { "method": "GET", "path": "/detect" },
+          "expect": {
+            "status": 200,
+            "body": {
+              "capabilities.extensions.supported": true,
+              "capabilities.extensions.echo": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "cart add echoes extensions on cart",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "body": {
+              "productId": "acme-wh-001",
+              "quantity": 1,
+              "extensions": {
+                "com.example.vendor": { "giftWrap": true }
+              }
+            }
+          },
+          "expect": {
+            "status": 200,
+            "body": {
+              "cart.extensions": {
+                "com.example.vendor": { "giftWrap": true }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "checkout initiate extensions appear on confirmed order",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "body": { "productId": "acme-wh-001", "quantity": 1 }
+          },
+          "expect": { "status": 200 },
+          "capture": { "cartId": "cart.id" }
+        },
+        {
+          "request": {
+            "method": "POST",
+            "path": "/checkout/initiate",
+            "body": {
+              "cartId": "{{cartId}}",
+              "shippingAddress": {
+                "line1": "123 Main St",
+                "city": "Berlin",
+                "country": "DE",
+                "postalCode": "10115"
+              },
+              "customerInfo": {
+                "email": "customer@example.com",
+                "phone": "+49 30 12345678"
+              },
+              "extensions": {
+                "com.example.vendor": { "loyaltyId": "L-42" }
+              }
+            }
+          },
+          "expect": { "status": 200 },
+          "capture": {
+            "sessionToken": "sessionToken",
+            "verificationToken": "verificationToken"
+          }
+        },
+        {
+          "request": {
+            "method": "POST",
+            "path": "/checkout/confirm",
+            "body": {
+              "sessionToken": "{{sessionToken}}",
+              "paymentDetails": {
+                "method": "credit_card",
+                "transactionVerification": {
+                  "verificationMethod": "email_confirmation",
+                  "verificationToken": "{{verificationToken}}"
+                }
+              }
+            }
+          },
+          "expect": {
+            "status": 200,
+            "body": {
+              "order.extensions": {
+                "com.example.vendor": { "loyaltyId": "L-42" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown top-level request property is tolerated on cart add",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "body": {
+              "productId": "acme-wh-001",
+              "quantity": 1,
+              "futureClientField": { "beta": true }
+            }
+          },
+          "expect": { "status": 200 }
+        }
+      ]
+    },
+    {
+      "name": "filters.extensions does not change core search results",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/products/search",
+            "body": {
+              "filters": {
+                "brand": "Acme",
+                "categories": ["Headphones"],
+                "priceRange": { "min": 90, "max": 210 }
+              }
+            }
+          },
+          "expect": { "status": 200 },
+          "capture": { "baselineTotal": "pagination.totalItems" }
+        },
+        {
+          "request": {
+            "method": "POST",
+            "path": "/products/search",
+            "body": {
+              "filters": {
+                "brand": "Acme",
+                "categories": ["Headphones"],
+                "priceRange": { "min": 90, "max": 210 },
+                "extensions": { "com.example": { "opaque": 1 } }
+              }
+            }
+          },
+          "expect": {
+            "status": 200,
+            "body": {
+              "pagination.totalItems": "{{baselineTotal}}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

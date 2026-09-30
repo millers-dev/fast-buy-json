@@ -47,7 +47,7 @@ jobs:
         run: npm install
 
       - name: Syntax-check demo server
-        run: node --check src/server.js && node --check src/commerce.js && node --check src/auth.js && node --check src/errors.js && node --check src/idempotency.js && node --check src/validation.js
+        run: node --check src/server.js && node --check src/commerce.js && node --check src/auth.js && node --check src/errors.js && node --check src/idempotency.js && node --check src/validation.js && node --check src/extensions.js
 
       - name: Run Node API tests
         run: npm test

@@ -67,6 +67,7 @@ export interface AddToCartParams {
   productId: string;
   quantity?: number;
   options?: Record<string, string>;
+  extensions?: Record<string, unknown>;
 }
 
 export interface CheckoutInitiateParams {
@@ -95,6 +96,7 @@ export interface CheckoutInitiateParams {
   };
   shippingOptionId?: string;
   discountCode?: string;
+  extensions?: Record<string, unknown>;
 }
 
 export interface ApplyDiscountParams {
@@ -127,7 +129,7 @@ export class FastBuyJSONAdapter {
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl || process.env.FASTBUYJSON_API_URL || 'http://localhost:3000/api/fastbuyjson';
-    this.userAgent = 'FastBuyJSON-MCP-Server/0.5.0';
+    this.userAgent = 'FastBuyJSON-MCP-Server/1.0.0';
     
     this.client = axios.create({
       baseURL: this.baseUrl,
@@ -251,6 +253,7 @@ export class FastBuyJSONAdapter {
         productId: params.productId,
         quantity: params.quantity || 1,
         options: params.options || {},
+        ...(params.extensions ? { extensions: params.extensions } : {}),
       }, config);
 
       // Store cart ID for future operations
@@ -327,6 +330,7 @@ export class FastBuyJSONAdapter {
         billingAddress: params.billingAddress,
         shippingOptionId: params.shippingOptionId,
         discountCode: params.discountCode,
+        ...(params.extensions ? { extensions: params.extensions } : {}),
       });
 
       // Store session token for checkout confirmation

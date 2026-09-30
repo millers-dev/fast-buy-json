@@ -2,15 +2,15 @@
   "suite": "commerce",
   "scenarios": [
     {
-      "name": "detect advertises commerce capabilities at 0.5.0",
+      "name": "detect advertises commerce capabilities at 1.0.0",
       "steps": [
         {
           "request": { "method": "GET", "path": "/detect" },
           "expect": {
             "status": 200,
             "body": {
-              "specVersion": "0.5.0",
-              "implementationVersion": "0.5.0"
+              "specVersion": "1.0.0",
+              "implementationVersion": "1.0.0"
             }
           },
           "capture": {}

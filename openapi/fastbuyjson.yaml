@@ -3,7 +3,7 @@
 openapi: 3.0.3
 info:
   title: FastBuyJSON
-  version: 0.5.0
+  version: 1.0.0
   description: 'JSON contract for LLM agents talking to e-commerce APIs.
 
     All commerce endpoints live under `/api/fastbuyjson`.
@@ -50,8 +50,8 @@ paths:
                 $ref: '#/components/schemas/DetectResponse'
               example:
                 standard: FastBuyJSON
-                specVersion: 0.5.0
-                implementationVersion: 0.5.0
+                specVersion: 1.0.0
+                implementationVersion: 1.0.0
                 supportedFeatures:
                 - idempotency
                 - pagination
@@ -72,6 +72,13 @@ paths:
                     - availability
                     - extensions
                     additionalProperties: true
+                  extensions:
+                    supported: true
+                    echo: true
+                    reservedNamespaces:
+                    - fastbuyjson
+                    - x-fastbuyjson
+                    vendorKeyConvention: reverse-dns or x- prefix
                   shipping:
                     options:
                     - standard
@@ -903,7 +910,7 @@ paths:
                     score: 10
                     timestamp: '2024-01-15T12:00:00.000Z'
                 orderId: 00000000-0000-4000-8000-000000000005
-                orderStatusUrl: /api/fastbuyjson/orders/c4daf433-bdaf-4ce3-978f-746844698e38
+                orderStatusUrl: /api/fastbuyjson/orders/00000000-0000-4000-8000-000000000005
                 message: Order confirmed successfully
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -1088,6 +1095,7 @@ components:
           type: object
           description: Additional custom fields
           additionalProperties: true
+      additionalProperties: true
     Address:
       description: Postal address for shipping or billing
       type: object
@@ -1998,11 +2006,11 @@ components:
         specVersion:
           type: string
           description: FastBuyJSON specification version
-          example: 0.5.0
+          example: 1.0.0
         implementationVersion:
           type: string
           description: Server implementation version
-          example: 0.5.0
+          example: 1.0.0
         capabilities:
           type: object
           description: Structured commerce capability descriptor
@@ -2031,6 +2039,13 @@ components:
               - percentage
               - fixed
               stackable: false
+            extensions:
+              supported: true
+              echo: true
+              reservedNamespaces:
+              - fastbuyjson
+              - x-fastbuyjson
+              vendorKeyConvention: reverse-dns or x- prefix
         supportedFeatures:
           type: array
           description: Supported FastBuyJSON features

@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2025-09-30
+
+### Added
+
+- **Extensions round-trip:** Reference Node and Python servers echo client `extensions` on cart add, checkout initiate, and confirmed orders.
+- **`capabilities.extensions`:** `/detect` advertises extension support, echo semantics, and reserved namespaces.
+- **Hook registry:** `src/extensions.js` and `src/python/extensions.py` (empty by default) for optional shipping/promo/tax registration.
+- **Compatibility policy:** [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) (SemVer 1.x additive-only).
+- **Conformance:** `conformance/cases/extensions.json` for echo, forward-compat, and filter stability.
+- **CI:** `check:examples` gate in GitHub Actions; `node --check` for `src/extensions.js`.
+
+### Changed
+
+- **MCP:** Cart and checkout tools accept optional `extensions` (adapter parity).
+- **Versions:** Packages, OpenAPI, MCP, SDK, and `/detect` aligned at **1.0.0**.
+
 ## [0.5.0] - 2025-09-30
 
 ### Added

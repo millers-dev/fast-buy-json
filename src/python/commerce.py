@@ -1,8 +1,14 @@
-"""Shared commerce rules for the FastBuyJSON reference servers (0.4.0)."""
+"""Shared commerce rules for the FastBuyJSON reference servers (1.0.0)."""
 
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+
+from extensions import (
+    get_registered_promos,
+    get_registered_shipping_options,
+    get_registered_tax_rules,
+)
 
 DEFAULT_CURRENCY = "USD"
 
@@ -54,17 +60,39 @@ def round2(value: float) -> float:
     return round(value + 1e-9, 2)
 
 
+def _merged_tax_rules() -> List[Dict[str, Any]]:
+    return [*TAX_RULES, *get_registered_tax_rules()]
+
+
+def _merged_shipping_catalog() -> List[Dict[str, Any]]:
+    return [*SHIPPING_CATALOG, *get_registered_shipping_options()]
+
+
+def _merged_promo_catalog() -> Dict[str, Dict[str, Any]]:
+    return {**PROMO_CATALOG, **get_registered_promos()}
+
+
 def get_tax_rule(country_code: Optional[str]) -> Dict[str, Any]:
     normalized = str(country_code).upper() if country_code else "default"
-    for rule in TAX_RULES:
+    rules = _merged_tax_rules()
+    for rule in rules:
         if rule["country"] == normalized:
             return rule
-    return next(rule for rule in TAX_RULES if rule["country"] == "default")
+    return next(rule for rule in rules if rule["country"] == "default")
+
+
+def find_shipping_option(option_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not option_id:
+        return None
+    for option in _merged_shipping_catalog():
+        if option["id"] == option_id:
+            return option
+    return None
 
 
 def resolve_shipping_option(option_id: Optional[str]) -> Dict[str, Any]:
     option_id = option_id or "standard"
-    for option in SHIPPING_CATALOG:
+    for option in _merged_shipping_catalog():
         if option["id"] == option_id:
             return option
     return SHIPPING_CATALOG[0]
@@ -79,7 +107,7 @@ def shipping_amount_for_option(option: Dict[str, Any], taxable_base: float) -> f
 
 def build_shipping_option_views(taxable_base: float) -> List[Dict[str, Any]]:
     views: List[Dict[str, Any]] = []
-    for option in SHIPPING_CATALOG:
+    for option in _merged_shipping_catalog():
         entry: Dict[str, Any] = {
             "id": option["id"],
             "label": option["label"],
@@ -113,7 +141,7 @@ def lookup_promo(code: Any) -> Optional[Dict[str, Any]]:
     normalized = normalize_promo_code(code)
     if not normalized:
         return None
-    return PROMO_CATALOG.get(normalized)
+    return _merged_promo_catalog().get(normalized)
 
 
 def compute_discount_amount(promo: Optional[Dict[str, Any]], subtotal: float) -> float:
@@ -295,6 +323,8 @@ def recompute_cart_totals(cart: Dict[str, Any], *, tax_country: Optional[str] = 
 
 
 def build_detect_capabilities() -> Dict[str, Any]:
+    shipping_catalog = _merged_shipping_catalog()
+    promo_catalog = _merged_promo_catalog()
     return {
         "filters": {
             "fields": [
@@ -306,8 +336,14 @@ def build_detect_capabilities() -> Dict[str, Any]:
             ],
             "additionalProperties": True,
         },
+        "extensions": {
+            "supported": True,
+            "echo": True,
+            "reservedNamespaces": ["fastbuyjson", "x-fastbuyjson"],
+            "vendorKeyConvention": "reverse-dns or x- prefix",
+        },
         "shipping": {
-            "options": [option["id"] for option in SHIPPING_CATALOG],
+            "options": [option["id"] for option in shipping_catalog],
             "freeShippingThreshold": {
                 "amount": 100,
                 "currency": DEFAULT_CURRENCY,
@@ -324,6 +360,6 @@ def build_detect_capabilities() -> Dict[str, Any]:
         "discounts": {
             "types": ["percentage", "fixed"],
             "stackable": False,
-            "promoCodes": list(PROMO_CATALOG.keys()),
+            "promoCodes": list(promo_catalog.keys()),
         },
     }
