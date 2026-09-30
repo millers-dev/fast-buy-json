@@ -26,6 +26,11 @@
                     "price"
                 ],
                 "properties": {
+                    "itemId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Stable line-item identifier"
+                    },
                     "productId": {
                         "type": "string",
                         "description": "Product identifier",

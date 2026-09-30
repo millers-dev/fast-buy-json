@@ -18,8 +18,14 @@ import {
   optionalJwtMiddleware,
 } from "./auth.js";
 import { sendProblem } from "./errors.js";
+import {
+  clearIdempotencyStore,
+  computeIdempotencyFingerprint,
+  lookupIdempotency,
+  storeIdempotency,
+} from "./idempotency.js";
 
-const SPEC_VERSION = "0.2.0";
+const SPEC_VERSION = "0.3.0";
 
 // Mock database
 const db = {
@@ -128,8 +134,6 @@ apiRouter.use((req, res, next) => {
   next();
 });
 
-const processedIdempotencyKeys = new Map();
-
 function idempotencyMiddleware(req, res, next) {
   const idempotencyKey = req.headers["idempotency-key"];
 
@@ -137,20 +141,39 @@ function idempotencyMiddleware(req, res, next) {
     return next();
   }
 
-  const cached = processedIdempotencyKeys.get(idempotencyKey);
-  if (cached) {
+  const scope = requestUserId(req);
+  const routePath = req.path;
+  const fingerprint = computeIdempotencyFingerprint(
+    req.method,
+    routePath,
+    req.body
+  );
+
+  const lookup = lookupIdempotency(scope, idempotencyKey, fingerprint);
+  if (lookup.kind === "conflict") {
+    return sendProblem(res, {
+      status: 409,
+      code: "IDEMPOTENCY_KEY_CONFLICT",
+      title: "Idempotency key conflict",
+      detail:
+        "The same Idempotency-Key was used with a different request payload",
+      instance: req.path,
+    });
+  }
+  if (lookup.kind === "replay") {
     res.set("Idempotency-Replayed", "true");
-    return res.status(cached.status).json(cached.body);
+    return res.status(lookup.status).json(lookup.body);
   }
 
   const originalJson = res.json.bind(res);
   res.json = (body) => {
-    if (res.statusCode >= 200 && res.statusCode < 300) {
-      processedIdempotencyKeys.set(idempotencyKey, {
-        status: res.statusCode,
-        body,
-      });
-    }
+    storeIdempotency(
+      scope,
+      idempotencyKey,
+      fingerprint,
+      res.statusCode,
+      body
+    );
     return originalJson(body);
   };
 
@@ -161,10 +184,52 @@ function requestUserId(req) {
   return req.userId || "anonymous";
 }
 
+function recomputeCartTotals(cart) {
+  for (const item of cart.items) {
+    item.lineTotal = {
+      amount: item.price.amount * item.quantity,
+      currency: item.price.currency,
+    };
+  }
+  cart.updated = new Date().toISOString();
+  const subtotal = cart.items.reduce((sum, item) => sum + item.lineTotal.amount, 0);
+  cart.totals.subtotal = subtotal;
+  cart.totals.tax = subtotal * 0.1;
+  cart.totals.shipping = subtotal > 100 ? 0 : 10;
+  if (cart.totals.discount === undefined) {
+    cart.totals.discount = 0;
+  }
+  cart.totals.total =
+    cart.totals.subtotal +
+    cart.totals.tax +
+    cart.totals.shipping -
+    (cart.totals.discount || 0);
+}
+
+function getCartForUser(userId) {
+  return db.carts[userId];
+}
+
+function requireCart(req, res) {
+  const userId = requestUserId(req);
+  const cart = getCartForUser(userId);
+  if (!cart) {
+    sendProblem(res, {
+      status: 404,
+      code: "CART_NOT_FOUND",
+      title: "Cart not found",
+      detail: "No cart exists for the current identity",
+      instance: req.path,
+    });
+    return null;
+  }
+  return cart;
+}
+
 export function resetDemoState() {
   db.carts = {};
   db.orders = {};
-  processedIdempotencyKeys.clear();
+  clearIdempotencyStore();
 }
 
 // Function to calculate risk score
@@ -507,6 +572,7 @@ apiRouter.post("/cart/add", optionalJwtMiddleware, idempotencyMiddleware, (req, 
     }
 
     cart.items.push({
+      itemId: uuidv4(),
       productId: variant.id,
       name: product.name,
       quantity,
@@ -519,16 +585,7 @@ apiRouter.post("/cart/add", optionalJwtMiddleware, idempotencyMiddleware, (req, 
     });
   }
 
-  // Recalculate cart totals
-  cart.updated = new Date().toISOString();
-  cart.totals.subtotal = cart.items.reduce(
-    (sum, item) => sum + item.lineTotal.amount,
-    0
-  );
-  cart.totals.tax = cart.totals.subtotal * 0.1; // Example 10% tax
-  cart.totals.shipping = cart.totals.subtotal > 100 ? 0 : 10; // Free shipping over $100
-  cart.totals.total =
-    cart.totals.subtotal + cart.totals.tax + cart.totals.shipping;
+  recomputeCartTotals(cart);
 
   res.json({
     cart,
@@ -557,6 +614,109 @@ apiRouter.get("/cart", optionalJwtMiddleware, (req, res) => {
     cart: db.carts[userId],
   });
 });
+
+/**
+ * Update cart line item quantity
+ */
+apiRouter.patch(
+  "/cart/items/:itemId",
+  optionalJwtMiddleware,
+  (req, res) => {
+    const cart = requireCart(req, res);
+    if (!cart) {
+      return;
+    }
+
+    const { itemId } = req.params;
+    const { quantity } = req.body ?? {};
+
+    if (
+      quantity === undefined ||
+      typeof quantity !== "number" ||
+      !Number.isInteger(quantity) ||
+      quantity < 1
+    ) {
+      return sendProblem(res, {
+        status: 400,
+        code: "VALIDATION_ERROR",
+        title: "Validation failed",
+        detail: "quantity must be an integer greater than or equal to 1",
+        instance: req.path,
+        errors: [{ field: "quantity", message: "must be >= 1" }],
+      });
+    }
+
+    const item = cart.items.find((line) => line.itemId === itemId);
+    if (!item) {
+      return sendProblem(res, {
+        status: 404,
+        code: "CART_ITEM_NOT_FOUND",
+        title: "Cart item not found",
+        detail: `No cart item with id ${itemId}`,
+        instance: req.path,
+      });
+    }
+
+    item.quantity = quantity;
+    recomputeCartTotals(cart);
+
+    res.json({ cart });
+  }
+);
+
+/**
+ * Remove a cart line item
+ */
+apiRouter.delete(
+  "/cart/items/:itemId",
+  optionalJwtMiddleware,
+  (req, res) => {
+    const cart = requireCart(req, res);
+    if (!cart) {
+      return;
+    }
+
+    const { itemId } = req.params;
+    const index = cart.items.findIndex((line) => line.itemId === itemId);
+    if (index < 0) {
+      return sendProblem(res, {
+        status: 404,
+        code: "CART_ITEM_NOT_FOUND",
+        title: "Cart item not found",
+        detail: `No cart item with id ${itemId}`,
+        instance: req.path,
+      });
+    }
+
+    cart.items.splice(index, 1);
+    recomputeCartTotals(cart);
+
+    res.json({ cart });
+  }
+);
+
+/**
+ * Clear the cart (keep cart id, empty items, zero totals)
+ */
+apiRouter.delete("/cart", optionalJwtMiddleware, (req, res) => {
+  const cart = requireCart(req, res);
+  if (!cart) {
+    return;
+  }
+
+  cart.items = [];
+  cart.totals = {
+    subtotal: 0,
+    tax: 0,
+    shipping: 0,
+    discount: 0,
+    total: 0,
+  };
+  cart.updated = new Date().toISOString();
+
+  res.json({ cart });
+});
+
 /**
  * Get Cart by ID
  * Retrieves a cart by its cartId. Searches all stored carts and returns the match.

@@ -22,8 +22,15 @@ from auth import (
     get_request_user_id,
 )
 from errors import ProblemException, problem_exception_handler
+from idempotency import (
+    clear_idempotency_store,
+    compute_idempotency_fingerprint,
+    idempotency_replay_response,
+    lookup_idempotency,
+    store_idempotency,
+)
 
-SPEC_VERSION = "0.2.0"
+SPEC_VERSION = "0.3.0"
 
 app = FastAPI(
     title="FastBuyJSON Demo API",
@@ -160,14 +167,69 @@ DB = {
     "checkout_sessions": {},
 }
 
-processed_idempotency_keys: Dict[str, Dict[str, Any]] = {}
-
-
 def reset_demo_state() -> None:
     DB["carts"].clear()
     DB["orders"].clear()
     DB["checkout_sessions"].clear()
-    processed_idempotency_keys.clear()
+    clear_idempotency_store()
+
+
+def recompute_cart_totals(cart: Dict[str, Any]) -> None:
+    for item in cart.get("items", []):
+        item["lineTotal"] = {
+            "amount": item["price"]["amount"] * item["quantity"],
+            "currency": item["price"]["currency"],
+        }
+    cart["updated"] = datetime.now().isoformat()
+    subtotal = sum(item["lineTotal"]["amount"] for item in cart.get("items", []))
+    totals = cart.setdefault("totals", {})
+    totals["subtotal"] = subtotal
+    totals["tax"] = subtotal * 0.1
+    totals["shipping"] = 0 if subtotal > 100 else 10
+    if totals.get("discount") is None:
+        totals["discount"] = 0
+    totals["total"] = (
+        totals["subtotal"] + totals["tax"] + totals["shipping"] - totals.get("discount", 0)
+    )
+
+
+def _require_cart(user_id: str, instance: str) -> Dict[str, Any]:
+    cart = DB["carts"].get(user_id)
+    if not cart:
+        raise ProblemException(
+            status_code=404,
+            code="CART_NOT_FOUND",
+            title="Cart not found",
+            detail="No cart exists for the current identity",
+            instance=instance,
+        )
+    return cart
+
+
+async def _idempotency_guard(
+    *,
+    scope: str,
+    idempotency_key: Optional[str],
+    method: str,
+    route_path: str,
+    body: Any,
+    instance: str,
+) -> Optional[JSONResponse]:
+    if not idempotency_key:
+        return None
+    fingerprint = compute_idempotency_fingerprint(method, route_path, body)
+    lookup = lookup_idempotency(scope, idempotency_key, fingerprint)
+    if lookup["kind"] == "conflict":
+        raise ProblemException(
+            status_code=409,
+            code="IDEMPOTENCY_KEY_CONFLICT",
+            title="Idempotency key conflict",
+            detail="The same Idempotency-Key was used with a different request payload",
+            instance=instance,
+        )
+    if lookup["kind"] == "replay":
+        return idempotency_replay_response(lookup["status"], lookup["body"])
+    return None
 
 
 def calculate_risk_score(
@@ -399,30 +461,35 @@ async def search_products(request: Request):
 @api_router.post("/cart/add")
 async def add_to_cart(
     request: Request,
-    idempotency_key: Optional[str] = Header(None),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     authorization: Optional[str] = Header(None),
 ):
-    if idempotency_key and idempotency_key in processed_idempotency_keys:
-        cached = processed_idempotency_keys[idempotency_key]
-        return JSONResponse(
-            status_code=cached["status"],
-            content=cached["body"],
-            headers={"Idempotency-Replayed": "true", "Cache-Control": "no-store"},
-        )
-
     data = await request.json()
+    user_id = get_request_user_id(authorization)
+    replay = await _idempotency_guard(
+        scope=user_id,
+        idempotency_key=idempotency_key,
+        method="POST",
+        route_path="/cart/add",
+        body=data,
+        instance="/cart/add",
+    )
+    if replay:
+        return replay
+
     product_id = data.get("productId")
     quantity = data.get("quantity", 1)
     options = data.get("options", {})
 
     product = next((p for p in DB["products"] if p["id"] == product_id), None)
     if not product:
-        raise HTTPException(
+        raise ProblemException(
             status_code=404,
-            detail={"error": "Product not found", "productId": product_id},
+            code="PRODUCT_NOT_FOUND",
+            title="Product not found",
+            detail=f"No product with id {product_id}",
+            instance="/cart/add",
         )
-
-    user_id = get_request_user_id(authorization)
 
     if user_id not in DB["carts"]:
         cart_id = str(uuid4())
@@ -476,6 +543,7 @@ async def add_to_cart(
 
         cart["items"].append(
             {
+                "itemId": str(uuid4()),
                 "productId": variant["id"],
                 "name": product["name"],
                 "quantity": quantity,
@@ -488,22 +556,12 @@ async def add_to_cart(
             }
         )
 
-    # Recalculate cart totals
-    cart["updated"] = datetime.now().isoformat()
-    cart["totals"]["subtotal"] = sum(
-        item["lineTotal"]["amount"] for item in cart["items"]
-    )
-    cart["totals"]["tax"] = cart["totals"]["subtotal"] * 0.1  # Example 10% tax
-    cart["totals"]["shipping"] = (
-        0 if cart["totals"]["subtotal"] > 100 else 10
-    )  # Free shipping over $100
-    cart["totals"]["total"] = (
-        cart["totals"]["subtotal"] + cart["totals"]["tax"] + cart["totals"]["shipping"]
-    )
+    recompute_cart_totals(cart)
 
     payload = {"cart": cart, "message": "Item added to cart successfully"}
     if idempotency_key:
-        processed_idempotency_keys[idempotency_key] = {"status": 200, "body": payload}
+        fingerprint = compute_idempotency_fingerprint("POST", "/cart/add", data)
+        store_idempotency(user_id, idempotency_key, fingerprint, 200, payload)
 
     return payload
 
@@ -527,27 +585,93 @@ async def get_cart_by_id(cart_id: str, authorization: Optional[str] = Header(Non
     if owned and owned.get("id") == cart_id:
         return {"cart": owned}
 
-    raise HTTPException(
-        status_code=404, detail={"error": "Cart not found", "cartId": cart_id}
+    raise ProblemException(
+        status_code=404,
+        code="CART_NOT_FOUND",
+        title="Cart not found",
+        detail=f"No cart with id {cart_id}",
+        instance=f"/cart/{cart_id}",
     )
 
 
-def _idempotency_cached_response(idempotency_key: Optional[str]) -> Optional[JSONResponse]:
-    if not idempotency_key:
-        return None
-    cached = processed_idempotency_keys.get(idempotency_key)
-    if not cached:
-        return None
-    return JSONResponse(
-        status_code=cached["status"],
-        content=cached["body"],
-        headers={"Idempotency-Replayed": "true", "Cache-Control": "no-store"},
+@api_router.patch("/cart/items/{item_id}")
+async def update_cart_item(
+    item_id: str,
+    request: Request,
+    authorization: Optional[str] = Header(None),
+):
+    user_id = get_request_user_id(authorization)
+    cart = _require_cart(user_id, f"/cart/items/{item_id}")
+    data = await request.json()
+    quantity = data.get("quantity")
+
+    if (
+        quantity is None
+        or not isinstance(quantity, int)
+        or isinstance(quantity, bool)
+        or quantity < 1
+    ):
+        raise ProblemException(
+            status_code=400,
+            code="VALIDATION_ERROR",
+            title="Validation failed",
+            detail="quantity must be an integer greater than or equal to 1",
+            instance=f"/cart/items/{item_id}",
+            errors=[{"field": "quantity", "message": "must be >= 1"}],
+        )
+
+    item = next((line for line in cart["items"] if line.get("itemId") == item_id), None)
+    if not item:
+        raise ProblemException(
+            status_code=404,
+            code="CART_ITEM_NOT_FOUND",
+            title="Cart item not found",
+            detail=f"No cart item with id {item_id}",
+            instance=f"/cart/items/{item_id}",
+        )
+
+    item["quantity"] = quantity
+    recompute_cart_totals(cart)
+    return {"cart": cart}
+
+
+@api_router.delete("/cart/items/{item_id}")
+async def delete_cart_item(item_id: str, authorization: Optional[str] = Header(None)):
+    user_id = get_request_user_id(authorization)
+    cart = _require_cart(user_id, f"/cart/items/{item_id}")
+
+    index = next(
+        (i for i, line in enumerate(cart["items"]) if line.get("itemId") == item_id),
+        -1,
     )
+    if index < 0:
+        raise ProblemException(
+            status_code=404,
+            code="CART_ITEM_NOT_FOUND",
+            title="Cart item not found",
+            detail=f"No cart item with id {item_id}",
+            instance=f"/cart/items/{item_id}",
+        )
+
+    cart["items"].pop(index)
+    recompute_cart_totals(cart)
+    return {"cart": cart}
 
 
-def _store_idempotency(idempotency_key: Optional[str], status: int, body: Dict[str, Any]) -> None:
-    if idempotency_key and 200 <= status < 300:
-        processed_idempotency_keys[idempotency_key] = {"status": status, "body": body}
+@api_router.delete("/cart")
+async def clear_cart(authorization: Optional[str] = Header(None)):
+    user_id = get_request_user_id(authorization)
+    cart = _require_cart(user_id, "/cart")
+    cart["items"] = []
+    cart["totals"] = {
+        "subtotal": 0,
+        "tax": 0,
+        "shipping": 0,
+        "discount": 0,
+        "total": 0,
+    }
+    cart["updated"] = datetime.now().isoformat()
+    return {"cart": cart}
 
 
 @api_router.post("/checkout/initiate")
@@ -556,22 +680,32 @@ async def initiate_checkout(
     authorization: Optional[str] = Header(None),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
-    replay = _idempotency_cached_response(idempotency_key)
+    data = await request.json()
+    user_id = get_request_user_id(authorization)
+    replay = await _idempotency_guard(
+        scope=user_id,
+        idempotency_key=idempotency_key,
+        method="POST",
+        route_path="/checkout/initiate",
+        body=data,
+        instance="/checkout/initiate",
+    )
     if replay:
         return replay
 
-    data = await request.json()
     cart_id = data.get("cartId")
     shipping_address = data.get("shippingAddress")
     billing_address = data.get("billingAddress")
     customer_info = data.get("customerInfo")
 
-    user_id = get_request_user_id(authorization)
-
     # Validate cart exists
     if user_id not in DB["carts"] or DB["carts"][user_id]["id"] != cart_id:
-        raise HTTPException(
-            status_code=404, detail={"error": "Cart not found", "cartId": cart_id}
+        raise ProblemException(
+            status_code=404,
+            code="CART_NOT_FOUND",
+            title="Cart not found",
+            detail=f"No cart with id {cart_id}",
+            instance="/checkout/initiate",
         )
 
     # Validate customer info (accept either 'phone' or legacy 'phoneNumber')
@@ -641,7 +775,11 @@ async def initiate_checkout(
         "cart": DB["carts"][user_id],
         "riskAssessment": DB["checkout_sessions"][session_token]["riskAssessment"],
     }
-    _store_idempotency(idempotency_key, 200, payload)
+    if idempotency_key:
+        fingerprint = compute_idempotency_fingerprint(
+            "POST", "/checkout/initiate", data
+        )
+        store_idempotency(user_id, idempotency_key, fingerprint, 200, payload)
     return payload
 
 
@@ -651,14 +789,21 @@ async def confirm_checkout(
     authorization: Optional[str] = Header(None),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
-    replay = _idempotency_cached_response(idempotency_key)
+    data = await request.json()
+    user_id = get_request_user_id(authorization)
+    replay = await _idempotency_guard(
+        scope=user_id,
+        idempotency_key=idempotency_key,
+        method="POST",
+        route_path="/checkout/confirm",
+        body=data,
+        instance="/checkout/confirm",
+    )
     if replay:
         return replay
 
-    data = await request.json()
     session_token = data.get("sessionToken")
     payment_details = data.get("paymentDetails")
-    user_id = get_request_user_id(authorization)
 
     # Validate session
     if session_token not in DB["checkout_sessions"]:
@@ -807,7 +952,9 @@ async def confirm_checkout(
         "orderStatusUrl": f"/api/fastbuyjson/orders/{order_id}",
         "message": "Order confirmed successfully",
     }
-    _store_idempotency(idempotency_key, 200, payload)
+    if idempotency_key:
+        fingerprint = compute_idempotency_fingerprint("POST", "/checkout/confirm", data)
+        store_idempotency(user_id, idempotency_key, fingerprint, 200, payload)
     return payload
 
 

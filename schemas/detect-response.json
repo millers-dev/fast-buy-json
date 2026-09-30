@@ -22,14 +22,14 @@
             "type": "string",
             "description": "FastBuyJSON specification version",
             "examples": [
-                "0.2.0"
+                "0.3.0"
             ]
         },
         "implementationVersion": {
             "type": "string",
             "description": "Server implementation version",
             "examples": [
-                "0.2.0"
+                "0.3.0"
             ]
         },
         "supportedFeatures": {

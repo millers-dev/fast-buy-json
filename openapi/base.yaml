@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: FastBuyJSON
-  version: 0.2.0
+  version: 0.3.0
   description: |
     JSON contract for LLM agents talking to e-commerce APIs.
     All commerce endpoints live under `/api/fastbuyjson`.
@@ -207,6 +207,93 @@ paths:
                 $ref: "#/components/schemas/CartResponse"
         "404":
           $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Cart]
+      summary: Clear the cart
+      operationId: clearCart
+      description: Removes all line items and zeroes totals while keeping the same cart id.
+      responses:
+        "200":
+          description: Empty cart snapshot
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "no-store"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /cart/items/{itemId}:
+    patch:
+      tags: [Cart]
+      summary: Update a cart line item quantity
+      operationId: updateCartItem
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CartUpdateItemRequest"
+      responses:
+        "200":
+          description: Updated cart
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "no-store"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: Cart or line item not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags: [Cart]
+      summary: Remove a cart line item
+      operationId: removeCartItem
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Updated cart
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "no-store"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartResponse"
+        "404":
+          description: Cart or line item not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /cart/{cartId}:
     get:
@@ -363,6 +450,12 @@ components:
             $ref: "#/components/schemas/Error"
     NotFound:
       description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    CartItemNotFound:
+      description: Cart line item not found
       content:
         application/problem+json:
           schema:
