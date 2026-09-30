@@ -24,10 +24,14 @@ JSON_GLOBS = (
     "schemas/*.json",
     "examples/*.json",
     "postman/*.json",
+    "conformance/cases/*.json",
+    "conformance/schema/*.json",
     "mcp-server/claude_desktop_config.json",
     "mcp-server/package.json",
     "mcp-server/tsconfig.json",
 )
+
+CASE_SCHEMA = ROOT / "conformance" / "schema" / "case.schema.json"
 
 
 def load_json(path: Path) -> object:
@@ -57,6 +61,23 @@ def main() -> int:
             failed = True
         else:
             print(f"OK schema {schema_path.name}")
+
+    if CASE_SCHEMA.exists():
+        case_schema = load_json(CASE_SCHEMA)
+        case_validator = Draft7Validator(case_schema)
+        for case_path in sorted((ROOT / "conformance" / "cases").glob("*.json")):
+            instance = load_json(case_path)
+            errors = sorted(
+                case_validator.iter_errors(instance), key=lambda err: list(err.path)
+            )
+            if errors:
+                failed = True
+                print(f"INVALID CONFORMANCE CASE {case_path.name}:")
+                for error in errors:
+                    location = ".".join(str(part) for part in error.path) or "(root)"
+                    print(f"  - {location}: {error.message}")
+            else:
+                print(f"OK conformance case {case_path.name}")
 
     for instance_path, schema_path in EXAMPLE_SCHEMA_PAIRS:
         schema = load_json(schema_path)

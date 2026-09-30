@@ -1,0 +1,76 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "ConformanceCaseFile",
+    "type": "object",
+    "required": ["suite", "scenarios"],
+    "properties": {
+        "suite": {
+            "type": "string"
+        },
+        "scenarios": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": ["name", "steps"],
+                "properties": {
+                    "name": { "type": "string" },
+                    "steps": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "required": ["request", "expect"],
+                            "properties": {
+                                "request": {
+                                    "type": "object",
+                                    "required": ["method", "path"],
+                                    "properties": {
+                                        "method": { "type": "string" },
+                                        "path": { "type": "string" },
+                                        "headers": {
+                                            "type": "object",
+                                            "additionalProperties": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "body": {},
+                                        "auth": {
+                                            "type": "object",
+                                            "properties": {
+                                                "username": { "type": "string" },
+                                                "password": { "type": "string" }
+                                            }
+                                        }
+                                    }
+                                },
+                                "expect": {
+                                    "type": "object",
+                                    "required": ["status"],
+                                    "properties": {
+                                        "status": { "type": "integer" },
+                                        "code": { "type": "string" },
+                                        "headers": {
+                                            "type": "object",
+                                            "additionalProperties": {
+                                                "type": ["string", "null"]
+                                            }
+                                        },
+                                        "body": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                },
+                                "capture": {
+                                    "type": "object",
+                                    "additionalProperties": { "type": "string" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

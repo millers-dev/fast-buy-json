@@ -142,8 +142,8 @@ def test_detect_spec_version(client):
     assert response.status_code == 200
     body = response.json()
     assert body["standard"] == "FastBuyJSON"
-    assert body["specVersion"] == "0.2.0"
-    assert body["implementationVersion"] == "0.2.0"
+    assert body["specVersion"] == "0.3.0"
+    assert body["implementationVersion"] == "0.3.0"
     assert response.headers.get("cache-control") == "public, max-age=300"
 
 
@@ -168,6 +168,99 @@ def test_invalid_bearer_problem_json(client):
     assert response.headers["content-type"].startswith("application/problem+json")
     assert response.json()["code"] == "INVALID_TOKEN"
     assert "Bearer" in response.headers.get("www-authenticate", "")
+
+
+def test_patch_cart_item_quantity(client):
+    added = client.post(
+        f"{API}/cart/add", json={"productId": "acme-wh-001", "quantity": 1}
+    )
+    item_id = added.json()["cart"]["items"][0]["itemId"]
+    patched = client.patch(
+        f"{API}/cart/items/{item_id}", json={"quantity": 5}
+    )
+    assert patched.status_code == 200
+    assert patched.json()["cart"]["items"][0]["quantity"] == 5
+
+
+def test_patch_rejects_low_quantity(client):
+    added = client.post(
+        f"{API}/cart/add", json={"productId": "acme-wh-001", "quantity": 1}
+    )
+    item_id = added.json()["cart"]["items"][0]["itemId"]
+    bad = client.patch(f"{API}/cart/items/{item_id}", json={"quantity": 0})
+    assert bad.status_code == 400
+    assert bad.json()["code"] == "VALIDATION_ERROR"
+
+
+def test_delete_cart_item_and_clear_cart(client):
+    added = client.post(
+        f"{API}/cart/add", json={"productId": "acme-wh-001", "quantity": 2}
+    )
+    cart_id = added.json()["cart"]["id"]
+    item_id = added.json()["cart"]["items"][0]["itemId"]
+    removed = client.delete(f"{API}/cart/items/{item_id}")
+    assert removed.status_code == 200
+    assert removed.json()["cart"]["items"] == []
+
+    client.post(f"{API}/cart/add", json={"productId": "acme-wh-001", "quantity": 1})
+    cleared = client.delete(f"{API}/cart")
+    assert cleared.status_code == 200
+    body = cleared.json()["cart"]
+    assert body["id"] == cart_id
+    assert body["items"] == []
+    assert body["totals"]["total"] == 0
+    assert body["totals"]["discount"] == 0
+
+
+def test_cart_item_not_found(client):
+    client.post(f"{API}/cart/add", json={"productId": "acme-wh-001", "quantity": 1})
+    missing = client.delete(
+        f"{API}/cart/items/00000000-0000-4000-8000-000000000099"
+    )
+    assert missing.status_code == 404
+    assert missing.json()["code"] == "CART_ITEM_NOT_FOUND"
+
+
+def test_idempotency_conflict(client):
+    key = "py-idem-conflict"
+    first = client.post(
+        f"{API}/cart/add",
+        json={"productId": "acme-wh-001", "quantity": 1},
+        headers={"Idempotency-Key": key},
+    )
+    assert first.status_code == 200
+    conflict = client.post(
+        f"{API}/cart/add",
+        json={"productId": "acme-wh-001", "quantity": 2},
+        headers={"Idempotency-Key": key},
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["code"] == "IDEMPOTENCY_KEY_CONFLICT"
+
+
+def test_idempotency_expired_record(client):
+    from idempotency import idempotency_store
+
+    key = "py-idem-expired"
+    first = client.post(
+        f"{API}/cart/add",
+        json={"productId": "acme-wh-001", "quantity": 1},
+        headers={"Idempotency-Key": key},
+    )
+    assert first.status_code == 200
+    record = idempotency_store.get(f"anonymous:{key}")
+    assert record is not None
+    from datetime import datetime, timedelta
+
+    record["expiresAt"] = (datetime.now() - timedelta(hours=1)).isoformat()
+
+    second = client.post(
+        f"{API}/cart/add",
+        json={"productId": "acme-wh-001", "quantity": 2},
+        headers={"Idempotency-Key": key},
+    )
+    assert second.status_code == 200
+    assert second.json()["cart"]["items"][0]["quantity"] == 3
 
 
 def test_idempotency_replayed_header(client):

@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED = "0.2.0"
+EXPECTED = "0.3.0"
 
 
 def read_text(path: Path) -> str:

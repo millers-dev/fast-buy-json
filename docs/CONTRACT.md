@@ -1,6 +1,6 @@
-# FastBuyJSON HTTP contract (0.2.0)
+# FastBuyJSON HTTP contract (0.3.0)
 
-This document freezes the Phase 1 contract implemented by the reference Node and Python servers. The machine-readable spec is generated at [`openapi/fastbuyjson.yaml`](../openapi/fastbuyjson.yaml) from JSON Schemas in [`schemas/`](../schemas/).
+This document describes the contract implemented by the reference Node and Python servers. The machine-readable spec is generated at [`openapi/fastbuyjson.yaml`](../openapi/fastbuyjson.yaml) from JSON Schemas in [`schemas/`](../schemas/).
 
 ## Base path
 
@@ -40,9 +40,10 @@ Failed requests return `Content-Type: application/problem+json` with at least:
 | 401 | `CERTIFICATE_VERIFICATION_FAILED` | Certificate auth failure |
 | 403 | `FORBIDDEN` | Reserved (roles not enforced in 0.x) |
 | 404 | `PRODUCT_NOT_FOUND` | Unknown product |
-| 404 | `CART_NOT_FOUND` | Unknown cart |
+| 404 | `CART_NOT_FOUND` | Unknown cart for the caller |
+| 404 | `CART_ITEM_NOT_FOUND` | Unknown `itemId` in the caller's cart |
 | 404 | `ORDER_NOT_FOUND` | Unknown order |
-| 409 | `IDEMPOTENCY_KEY_CONFLICT` | Reserved — same key, different payload (Phase 2 enforcement) |
+| 409 | `IDEMPOTENCY_KEY_CONFLICT` | Same `Idempotency-Key`, different request fingerprint |
 | 429 | `RATE_LIMITED` | Reserved |
 | 500 | `INTERNAL_ERROR` | Unhandled server error |
 
@@ -64,10 +65,23 @@ Identity for carts, checkout, and orders is always the JWT `sub` claim. Header `
 
 - Header: `Idempotency-Key` (UUID recommended) on mutating POSTs: `/cart/add`, `/checkout/initiate`, `/checkout/confirm`.
 - Client-optional in 0.x; **servers must honor** when present.
-- Same key + prior **2xx** → replay cached status/body; response header `Idempotency-Replayed: true`.
+- Storage scope: ``${identity}:${key}`` where `identity` is JWT `sub` or `anonymous`.
+- Fingerprint: `sha256(method + "\n" + routePath + "\n" + canonicalJSON(body))` (hex). `canonicalJSON` sorts object keys recursively with no insignificant whitespace.
+- Same key + same fingerprint + prior **2xx** → replay cached status/body; response header `Idempotency-Replayed: true`.
+- Same key + different fingerprint → **409** `IDEMPOTENCY_KEY_CONFLICT` (record unchanged).
 - **4xx/5xx** do not store the key.
-- Same key + different payload → **409** `IDEMPOTENCY_KEY_CONFLICT` (documented; durable fingerprint enforcement is Phase 2).
-- Retention target: 24 hours (in-memory demos may not expire until Phase 2).
+- Retention: **24 hours**, lazy expiration on lookup (no background sweeper).
+- `PATCH` / `DELETE` cart mutations are naturally idempotent; `Idempotency-Key` is **not** honored on those routes.
+
+## Cart mutations (0.3.0)
+
+| Method | Path | Body | Success |
+|--------|------|------|---------|
+| `PATCH` | `/cart/items/{itemId}` | `{ "quantity": int ≥ 1 }` | `200` `CartResponse` |
+| `DELETE` | `/cart/items/{itemId}` | — | `200` `CartResponse` |
+| `DELETE` | `/cart` | — | `200` `CartResponse` (same cart `id`, empty `items`, zeroed totals including `discount`) |
+
+Each line item receives a stable `itemId` (UUID) when added via `POST /cart/add`. `PATCH` sets **absolute** quantity (`quantity: 0` is rejected; use `DELETE` to remove a line).
 
 ## Cache-Control
 
@@ -80,5 +94,9 @@ Checkout session expiry remains in the JSON body (`expiresAt`, typically 1 hour)
 
 ## Versioning
 
-- OpenAPI `info.version`, packages, and `/detect` `specVersion` / `implementationVersion` are aligned at **0.2.0** for this release.
+- OpenAPI `info.version`, packages, and `/detect` `specVersion` / `implementationVersion` are aligned at **0.3.0** for this release.
 - `standard` in `/detect` is the string `FastBuyJSON` (not a versioned product name).
+
+## Conformance
+
+Shared declarative scenarios live under [`conformance/`](../conformance/) and run in-process against both reference servers in CI.

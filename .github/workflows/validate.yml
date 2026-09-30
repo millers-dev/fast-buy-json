@@ -36,7 +36,7 @@ jobs:
         run: python scripts/check_versions.py
 
       - name: Run Python API tests
-        run: python -m pytest tests/test_python_server.py
+        run: python -m pytest tests/test_python_server.py conformance/harness/python
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -47,7 +47,7 @@ jobs:
         run: npm install
 
       - name: Syntax-check demo server
-        run: node --check src/server.js && node --check src/auth.js && node --check src/errors.js
+        run: node --check src/server.js && node --check src/auth.js && node --check src/errors.js && node --check src/idempotency.js
 
       - name: Run Node API tests
         run: npm test

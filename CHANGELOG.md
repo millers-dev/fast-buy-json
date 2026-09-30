@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-09-30
+
+### Added
+
+- **Cart mutations:** `PATCH /cart/items/{itemId}`, `DELETE /cart/items/{itemId}`, and `DELETE /cart` with stable per-line `itemId` on add.
+- **Error code:** `404 CART_ITEM_NOT_FOUND` for unknown line items.
+- **Conformance suite v0:** Shared JSON scenarios under `conformance/` with Node and Python in-process runners wired into CI.
+- **Schema:** `CartUpdateItemRequest` (`schemas/cart-update-item.json`).
+
+### Changed
+
+- **Idempotency:** Scoped store ``${identity}:${key}``, SHA-256 request fingerprints, `409 IDEMPOTENCY_KEY_CONFLICT` on payload mismatch, 24h lazy TTL; only 2xx responses are stored.
+- **Versions:** Packages, OpenAPI, MCP, and `/detect` aligned at **0.3.0** (`scripts/check_versions.py`).
+
 ## [0.2.0] - 2025-09-30
 
 ### Contract (Phase 1)

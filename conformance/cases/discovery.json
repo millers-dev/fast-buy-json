@@ -1,0 +1,24 @@
+{
+  "suite": "discovery",
+  "scenarios": [
+    {
+      "name": "detect advertises FastBuyJSON 0.3.0",
+      "steps": [
+        {
+          "request": { "method": "GET", "path": "/detect" },
+          "expect": {
+            "status": 200,
+            "body": {
+              "standard": "FastBuyJSON",
+              "specVersion": "0.3.0",
+              "implementationVersion": "0.3.0"
+            },
+            "headers": {
+              "cache-control": "public, max-age=300"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

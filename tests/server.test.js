@@ -179,12 +179,12 @@ test("rejects invalid bearer tokens", async () => {
   assert.match(headers["www-authenticate"] || "", /Bearer/i);
 });
 
-test("detect advertises specVersion 0.2.0", async () => {
+test("detect advertises specVersion 0.3.0", async () => {
   const { status, json, headers } = await request("GET", `${API}/detect`);
   assert.equal(status, 200);
   assert.equal(json.standard, "FastBuyJSON");
-  assert.equal(json.specVersion, "0.2.0");
-  assert.equal(json.implementationVersion, "0.2.0");
+  assert.equal(json.specVersion, "0.3.0");
+  assert.equal(json.implementationVersion, "0.3.0");
   assert.equal(headers["cache-control"], "public, max-age=300");
 });
 
@@ -195,6 +195,106 @@ test("404 product responses are problem+json", async () => {
   assert.equal(status, 404);
   assert.ok(headers["content-type"]?.startsWith("application/problem+json"));
   expectProblem(json, { status: 404, code: "PRODUCT_NOT_FOUND" });
+});
+
+async function addProduct(quantity = 1) {
+  const res = await request("POST", `${API}/cart/add`, {
+    body: { productId: "acme-wh-001", quantity },
+  });
+  assert.equal(res.status, 200);
+  return res.json;
+}
+
+test("PATCH cart item updates quantity", async () => {
+  const added = await addProduct(1);
+  const itemId = added.cart.items[0].itemId;
+  assert.ok(itemId);
+
+  const patched = await request("PATCH", `${API}/cart/items/${itemId}`, {
+    body: { quantity: 4 },
+  });
+  assert.equal(patched.status, 200);
+  assert.equal(patched.json.cart.items[0].quantity, 4);
+});
+
+test("PATCH rejects quantity below 1", async () => {
+  const added = await addProduct(1);
+  const itemId = added.cart.items[0].itemId;
+  const bad = await request("PATCH", `${API}/cart/items/${itemId}`, {
+    body: { quantity: 0 },
+  });
+  assert.equal(bad.status, 400);
+  expectProblem(bad.json, { status: 400, code: "VALIDATION_ERROR" });
+});
+
+test("DELETE cart item and clear cart", async () => {
+  const added = await addProduct(2);
+  const itemId = added.cart.items[0].itemId;
+  const cartId = added.cart.id;
+
+  const removed = await request("DELETE", `${API}/cart/items/${itemId}`);
+  assert.equal(removed.status, 200);
+  assert.equal(removed.json.cart.items.length, 0);
+
+  const readded = await addProduct(1);
+  assert.equal(readded.cart.id, cartId);
+
+  const cleared = await request("DELETE", `${API}/cart`);
+  assert.equal(cleared.status, 200);
+  assert.equal(cleared.json.cart.id, cartId);
+  assert.equal(cleared.json.cart.items.length, 0);
+  assert.equal(cleared.json.cart.totals.total, 0);
+  assert.equal(cleared.json.cart.totals.discount, 0);
+});
+
+test("DELETE unknown cart item returns CART_ITEM_NOT_FOUND", async () => {
+  await addProduct(1);
+  const missing = await request(
+    "DELETE",
+    `${API}/cart/items/00000000-0000-4000-8000-000000000099`
+  );
+  assert.equal(missing.status, 404);
+  expectProblem(missing.json, { status: 404, code: "CART_ITEM_NOT_FOUND" });
+});
+
+test("idempotency conflict on same key with different payload", async () => {
+  const key = "idem-conflict";
+  const first = await request("POST", `${API}/cart/add`, {
+    headers: { "Idempotency-Key": key },
+    body: { productId: "acme-wh-001", quantity: 1 },
+  });
+  assert.equal(first.status, 200);
+
+  const conflict = await request("POST", `${API}/cart/add`, {
+    headers: { "Idempotency-Key": key },
+    body: { productId: "acme-wh-001", quantity: 2 },
+  });
+  assert.equal(conflict.status, 409);
+  expectProblem(conflict.json, {
+    status: 409,
+    code: "IDEMPOTENCY_KEY_CONFLICT",
+  });
+});
+
+test("expired idempotency record allows reuse", async () => {
+  const { idempotencyStore } = await import("../src/idempotency.js");
+  const key = "idem-expired";
+  const first = await request("POST", `${API}/cart/add`, {
+    headers: { "Idempotency-Key": key },
+    body: { productId: "acme-wh-001", quantity: 1 },
+  });
+  assert.equal(first.status, 200);
+
+  const record = idempotencyStore.get(`anonymous:${key}`);
+  assert.ok(record);
+  record.expiresAt = new Date(Date.now() - 1000).toISOString();
+
+  const second = await request("POST", `${API}/cart/add`, {
+    headers: { "Idempotency-Key": key },
+    body: { productId: "acme-wh-001", quantity: 2 },
+  });
+  assert.equal(second.status, 200);
+  assert.equal(second.json.cart.items[0].quantity, 3);
 });
 
 test("idempotent replay sets Idempotency-Replayed header", async () => {

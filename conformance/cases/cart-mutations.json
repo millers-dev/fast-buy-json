@@ -1,0 +1,136 @@
+{
+  "suite": "cart-mutations",
+  "scenarios": [
+    {
+      "name": "patch updates line quantity",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "body": { "productId": "acme-wh-001", "quantity": 1 }
+          },
+          "expect": { "status": 200 },
+          "capture": { "itemId": "cart.items.0.itemId" }
+        },
+        {
+          "request": {
+            "method": "PATCH",
+            "path": "/cart/items/{{itemId}}",
+            "body": { "quantity": 3 }
+          },
+          "expect": {
+            "status": 200,
+            "body": { "cart.items.0.quantity": 3 }
+          }
+        }
+      ]
+    },
+    {
+      "name": "patch rejects quantity below 1",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "body": { "productId": "acme-wh-001", "quantity": 1 }
+          },
+          "expect": { "status": 200 },
+          "capture": { "itemId": "cart.items.0.itemId" }
+        },
+        {
+          "request": {
+            "method": "PATCH",
+            "path": "/cart/items/{{itemId}}",
+            "body": { "quantity": 0 }
+          },
+          "expect": {
+            "status": 400,
+            "code": "VALIDATION_ERROR"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete item removes line",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "body": { "productId": "acme-wh-001", "quantity": 1 }
+          },
+          "expect": { "status": 200 },
+          "capture": { "itemId": "cart.items.0.itemId", "cartId": "cart.id" }
+        },
+        {
+          "request": {
+            "method": "DELETE",
+            "path": "/cart/items/{{itemId}}"
+          },
+          "expect": {
+            "status": 200,
+            "body": { "cart.items": [] }
+          }
+        },
+        {
+          "request": { "method": "GET", "path": "/cart" },
+          "expect": {
+            "status": 200,
+            "body": { "cart.id": "{{cartId}}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete unknown item returns CART_ITEM_NOT_FOUND",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "body": { "productId": "acme-wh-001", "quantity": 1 }
+          },
+          "expect": { "status": 200 }
+        },
+        {
+          "request": {
+            "method": "DELETE",
+            "path": "/cart/items/00000000-0000-4000-8000-000000000099"
+          },
+          "expect": {
+            "status": 404,
+            "code": "CART_ITEM_NOT_FOUND"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete cart clears items and zeroes totals",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "body": { "productId": "acme-wh-001", "quantity": 2 }
+          },
+          "expect": { "status": 200 },
+          "capture": { "cartId": "cart.id" }
+        },
+        {
+          "request": { "method": "DELETE", "path": "/cart" },
+          "expect": {
+            "status": 200,
+            "body": {
+              "cart.id": "{{cartId}}",
+              "cart.items": [],
+              "cart.totals.subtotal": 0,
+              "cart.totals.total": 0,
+              "cart.totals.discount": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

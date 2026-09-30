@@ -1,0 +1,82 @@
+{
+  "suite": "idempotency",
+  "scenarios": [
+    {
+      "name": "same key and payload replays with header",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "headers": { "Idempotency-Key": "conf-suite-replay" },
+            "body": { "productId": "acme-wh-001", "quantity": 1 }
+          },
+          "expect": { "status": 200 },
+          "capture": { "cartId": "cart.id" }
+        },
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "headers": { "Idempotency-Key": "conf-suite-replay" },
+            "body": { "productId": "acme-wh-001", "quantity": 1 }
+          },
+          "expect": {
+            "status": 200,
+            "headers": { "idempotency-replayed": "true" },
+            "body": { "cart.id": "{{cartId}}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "same key different payload returns 409",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "headers": { "Idempotency-Key": "conf-suite-conflict" },
+            "body": { "productId": "acme-wh-001", "quantity": 1 }
+          },
+          "expect": { "status": 200 }
+        },
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "headers": { "Idempotency-Key": "conf-suite-conflict" },
+            "body": { "productId": "acme-wh-001", "quantity": 5 }
+          },
+          "expect": {
+            "status": 409,
+            "code": "IDEMPOTENCY_KEY_CONFLICT"
+          }
+        }
+      ]
+    },
+    {
+      "name": "404 does not burn idempotency key",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "headers": { "Idempotency-Key": "conf-suite-no-burn" },
+            "body": { "productId": "does-not-exist", "quantity": 1 }
+          },
+          "expect": { "status": 404 }
+        },
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "headers": { "Idempotency-Key": "conf-suite-no-burn" },
+            "body": { "productId": "acme-wh-001", "quantity": 1 }
+          },
+          "expect": { "status": 200 }
+        }
+      ]
+    }
+  ]
+}

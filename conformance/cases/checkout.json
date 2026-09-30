@@ -1,0 +1,63 @@
+{
+  "suite": "checkout",
+  "scenarios": [
+    {
+      "name": "checkout confirm requires verification token",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "body": { "productId": "acme-wh-001", "quantity": 1 }
+          },
+          "expect": { "status": 200 },
+          "capture": { "cartId": "cart.id" }
+        },
+        {
+          "request": {
+            "method": "POST",
+            "path": "/checkout/initiate",
+            "body": {
+              "cartId": "{{cartId}}",
+              "shippingAddress": {
+                "line1": "123 Main St",
+                "city": "Berlin",
+                "country": "DE",
+                "postalCode": "10115"
+              },
+              "customerInfo": {
+                "email": "customer@example.com",
+                "phone": "+49 30 12345678"
+              }
+            }
+          },
+          "expect": { "status": 200 },
+          "capture": {
+            "sessionToken": "sessionToken",
+            "verificationToken": "verificationToken"
+          }
+        },
+        {
+          "request": {
+            "method": "POST",
+            "path": "/checkout/confirm",
+            "body": {
+              "sessionToken": "{{sessionToken}}",
+              "paymentDetails": {
+                "method": "credit_card",
+                "transactionVerification": {
+                  "verificationMethod": "email_confirmation",
+                  "verificationToken": "wrong-token"
+                }
+              }
+            }
+          },
+          "expect": {
+            "status": 400,
+            "code": "INVALID_VERIFICATION_TOKEN"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "suite": "errors",
+  "scenarios": [
+    {
+      "name": "unknown product returns PRODUCT_NOT_FOUND problem",
+      "steps": [
+        {
+          "request": {
+            "method": "POST",
+            "path": "/cart/add",
+            "body": { "productId": "missing-sku", "quantity": 1 }
+          },
+          "expect": {
+            "status": 404,
+            "code": "PRODUCT_NOT_FOUND"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cart mutation without cart returns CART_NOT_FOUND",
+      "steps": [
+        {
+          "request": {
+            "method": "PATCH",
+            "path": "/cart/items/00000000-0000-4000-8000-000000000001",
+            "body": { "quantity": 1 }
+          },
+          "expect": {
+            "status": 404,
+            "code": "CART_NOT_FOUND"
+          }
+        }
+      ]
+    }
+  ]
+}

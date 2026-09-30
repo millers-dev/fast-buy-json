@@ -3,7 +3,7 @@
 openapi: 3.0.3
 info:
   title: FastBuyJSON
-  version: 0.2.0
+  version: 0.3.0
   description: 'JSON contract for LLM agents talking to e-commerce APIs.
 
     All commerce endpoints live under `/api/fastbuyjson`.
@@ -211,6 +211,95 @@ paths:
                 $ref: '#/components/schemas/CartResponse'
         '404':
           $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+      - Cart
+      summary: Clear the cart
+      operationId: clearCart
+      description: Removes all line items and zeroes totals while keeping the same cart id.
+      responses:
+        '200':
+          description: Empty cart snapshot
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /cart/items/{itemId}:
+    patch:
+      tags:
+      - Cart
+      summary: Update a cart line item quantity
+      operationId: updateCartItem
+      parameters:
+      - name: itemId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartUpdateItemRequest'
+      responses:
+        '200':
+          description: Updated cart
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Cart or line item not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Cart
+      summary: Remove a cart line item
+      operationId: removeCartItem
+      parameters:
+      - name: itemId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Updated cart
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+        '404':
+          description: Cart or line item not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /cart/{cartId}:
     get:
       tags:
@@ -370,6 +459,12 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Error'
+    CartItemNotFound:
+      description: Cart line item not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
     IdempotencyConflict:
       description: Same idempotency key was reused with a different request payload
       content:
@@ -460,6 +555,11 @@ components:
       - quantity
       - price
       properties:
+        itemId:
+          type: string
+          format: uuid
+          description: Stable line-item identifier assigned when the item is added
+          example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
         productId:
           type: string
           description: Product identifier
@@ -534,6 +634,11 @@ components:
                 - price
                 - lineTotal
                 properties:
+                  itemId:
+                    type: string
+                    format: uuid
+                    description: Stable line-item identifier
+                    example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
                   productId:
                     type: string
                     description: Product identifier
@@ -624,6 +729,17 @@ components:
           type: object
           description: Additional custom fields
           additionalProperties: true
+    CartUpdateItemRequest:
+      description: Update a cart line item quantity (absolute, minimum 1)
+      type: object
+      required:
+      - quantity
+      properties:
+        quantity:
+          type: integer
+          minimum: 1
+          description: New absolute quantity for the line item
+          example: 2
     Cart:
       description: Shopping cart with line items and totals
       type: object
@@ -645,6 +761,10 @@ components:
             - quantity
             - price
             properties:
+              itemId:
+                type: string
+                format: uuid
+                description: Stable line-item identifier
               productId:
                 type: string
                 description: Product identifier
@@ -1182,11 +1302,11 @@ components:
         specVersion:
           type: string
           description: FastBuyJSON specification version
-          example: 0.2.0
+          example: 0.3.0
         implementationVersion:
           type: string
           description: Server implementation version
-          example: 0.2.0
+          example: 0.3.0
         supportedFeatures:
           type: array
           description: Supported FastBuyJSON features
