@@ -305,7 +305,7 @@ apiRouter.post("/auth/certificate", (req, res) => {
  */
 apiRouter.get("/detect", (req, res) => {
   res.json({
-    standard: "FastBuyJSON 1.0.0",
+    standard: "FastBuyJSON 0.1.0",
     implementationVersion: "0.1.0",
     supportedFeatures: [
       "idempotency",
