@@ -22,7 +22,7 @@ from auth import (
 app = FastAPI(
     title="FastBuyJSON Demo API",
     description="Demo server for the FastBuyJSON e-commerce API standard",
-    version="1.0.0",
+    version="0.1.0",
 )
 
 # Create a sub-application for the standardized API path
@@ -269,7 +269,7 @@ async def detect_fastbuyjson():
     Returns basic information about the API implementation.
     """
     return {
-        "standard": "FastBuyJSON 1.0.0",
+        "standard": "FastBuyJSON 0.1.0",
         "implementationVersion": "0.1.0",
         "supportedFeatures": [
             "idempotency",

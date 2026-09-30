@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: FastBuyJSON
-  version: 1.0.0
+  version: 0.1.0
   description: |
     JSON contract for LLM agents talking to e-commerce APIs.
     All commerce endpoints live under `/api/fastbuyjson`.
@@ -385,7 +385,7 @@ components:
       properties:
         standard:
           type: string
-          example: FastBuyJSON 1.0.0
+          example: FastBuyJSON 0.1.0
         implementationVersion:
           type: string
         supportedFeatures:
