@@ -1,6 +1,12 @@
 /**
- * Shared commerce rules for the FastBuyJSON reference servers (0.4.0).
+ * Shared commerce rules for the FastBuyJSON reference servers (1.0.0).
  */
+
+import {
+  getRegisteredPromos,
+  getRegisteredShippingOptions,
+  getRegisteredTaxRules,
+} from "./extensions.js";
 
 export const DEFAULT_CURRENCY = "USD";
 
@@ -51,15 +57,35 @@ export function round2(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+function mergedTaxRules() {
+  return [...TAX_RULES, ...getRegisteredTaxRules()];
+}
+
+function mergedShippingCatalog() {
+  return [...SHIPPING_CATALOG, ...getRegisteredShippingOptions()];
+}
+
+function mergedPromoCatalog() {
+  return { ...PROMO_CATALOG, ...getRegisteredPromos() };
+}
+
 export function getTaxRule(countryCode) {
   const normalized = countryCode ? String(countryCode).toUpperCase() : "default";
-  const match = TAX_RULES.find((rule) => rule.country === normalized);
-  return match || TAX_RULES.find((rule) => rule.country === "default");
+  const rules = mergedTaxRules();
+  const match = rules.find((rule) => rule.country === normalized);
+  return match || rules.find((rule) => rule.country === "default");
+}
+
+export function findShippingOption(optionId) {
+  if (!optionId) {
+    return undefined;
+  }
+  return mergedShippingCatalog().find((option) => option.id === optionId);
 }
 
 export function resolveShippingOption(optionId) {
   const id = optionId || "standard";
-  return SHIPPING_CATALOG.find((option) => option.id === id) || SHIPPING_CATALOG[0];
+  return mergedShippingCatalog().find((option) => option.id === id) || SHIPPING_CATALOG[0];
 }
 
 export function shippingAmountForOption(option, taxableBase) {
@@ -70,7 +96,7 @@ export function shippingAmountForOption(option, taxableBase) {
 }
 
 export function buildShippingOptionViews(taxableBase) {
-  return SHIPPING_CATALOG.map((option) => ({
+  return mergedShippingCatalog().map((option) => ({
     id: option.id,
     label: option.label,
     amount: {
@@ -102,7 +128,7 @@ export function lookupPromo(code) {
   if (!normalized) {
     return null;
   }
-  return PROMO_CATALOG[normalized] || null;
+  return mergedPromoCatalog()[normalized] || null;
 }
 
 export function computeDiscountAmount(promo, subtotal) {
@@ -293,13 +319,21 @@ export function recomputeCartTotals(cart, options = {}) {
 }
 
 export function buildDetectCapabilities() {
+  const shippingCatalog = mergedShippingCatalog();
+  const promoCatalog = mergedPromoCatalog();
   return {
     filters: {
       fields: ["brand", "categories", "priceRange", "availability", "extensions"],
       additionalProperties: true,
     },
+    extensions: {
+      supported: true,
+      echo: true,
+      reservedNamespaces: ["fastbuyjson", "x-fastbuyjson"],
+      vendorKeyConvention: "reverse-dns or x- prefix",
+    },
     shipping: {
-      options: SHIPPING_CATALOG.map((option) => option.id),
+      options: shippingCatalog.map((option) => option.id),
       freeShippingThreshold: {
         amount: 100,
         currency: DEFAULT_CURRENCY,
@@ -316,7 +350,7 @@ export function buildDetectCapabilities() {
     discounts: {
       types: ["percentage", "fixed"],
       stackable: false,
-      promoCodes: Object.keys(PROMO_CATALOG),
+      promoCodes: Object.keys(promoCatalog),
     },
   };
 }

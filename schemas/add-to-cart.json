@@ -38,5 +38,6 @@
             "description": "Additional custom fields",
             "additionalProperties": true
         }
-    }
+    },
+    "additionalProperties": true
 }

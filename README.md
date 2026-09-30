@@ -4,7 +4,7 @@ FastBuyJSON is a JSON-based contract for LLM agents talking to e-commerce APIs. 
 
 This repository is the **open-source standard plus a reference implementation**. Recovered and restored from local editor history after the working tree was deleted.
 
-**Release:** `0.5.0` — runtime request validation, TypeScript SDK (`sdk/typescript/`), OpenAPI response examples, and MCP integration tests in CI. See [`CHANGELOG.md`](CHANGELOG.md).
+**Release:** `1.0.0` — stable 1.x line with `extensions` round-trip, hook registry, and [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md). See [`CHANGELOG.md`](CHANGELOG.md).
 
 ## What is in this repo
 
@@ -115,7 +115,7 @@ npm run sdk:generate-types
 npm --prefix sdk/typescript run build
 ```
 
-Import `@fastbuyjson/sdk` from `sdk/typescript/` (local path; not published to npm in 0.5.0).
+Import `@fastbuyjson/sdk` from `sdk/typescript/` (local path; not published to npm in 1.0.0).
 
 ## Recovery notes
 

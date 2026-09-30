@@ -29,6 +29,9 @@ jobs:
       - name: Check OpenAPI drift
         run: python scripts/build_openapi.py --check
 
+      - name: Check captured response examples
+        run: node scripts/capture_examples.mjs --check
+
       - name: Validate OpenAPI spec
         run: openapi-spec-validator openapi/fastbuyjson.yaml
 
@@ -47,7 +50,7 @@ jobs:
         run: npm install
 
       - name: Syntax-check demo server
-        run: node --check src/server.js && node --check src/commerce.js && node --check src/auth.js && node --check src/errors.js && node --check src/idempotency.js && node --check src/validation.js
+        run: node --check src/server.js && node --check src/commerce.js && node --check src/auth.js && node --check src/errors.js && node --check src/idempotency.js && node --check src/validation.js && node --check src/extensions.js
 
       - name: Run Node API tests
         run: npm test

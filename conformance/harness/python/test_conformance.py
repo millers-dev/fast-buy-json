@@ -29,6 +29,9 @@ def get_by_path(obj, path: str):
 
 def substitute(value, vars_map):
     if isinstance(value, str):
+        full = re.fullmatch(r"\{\{(\w+)\}\}", value)
+        if full:
+            return vars_map[full.group(1)]
         return re.sub(
             r"\{\{(\w+)\}\}",
             lambda m: str(vars_map[m.group(1)]),

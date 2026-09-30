@@ -27,7 +27,7 @@ import { FastBuyJSONMockAdapter } from './mock-adapter.js';
 const server = new Server(
   {
     name: 'fastbuyjson-mcp-server-reference',
-    version: '0.5.0',
+    version: '1.0.0',
   },
   {
     capabilities: {

@@ -24,7 +24,7 @@ import { FastBuyJSONAdapter } from './adapter.js';
 const server = new Server(
   {
     name: 'fastbuyjson-mcp-server-reference',
-    version: '0.5.0',
+    version: '1.0.0',
   },
   {
     capabilities: {
@@ -58,6 +58,7 @@ const AddToCartSchema = z.object({
   productId: z.string(),
   quantity: z.number().min(1).default(1),
   options: z.record(z.string()).optional(),
+  extensions: z.record(z.unknown()).optional(),
 });
 
 const CheckoutInitiateSchema = z.object({
@@ -86,6 +87,7 @@ const CheckoutInitiateSchema = z.object({
   }).optional(),
   shippingOptionId: z.string().optional(),
   discountCode: z.string().optional(),
+  extensions: z.record(z.unknown()).optional(),
 });
 
 const ApplyDiscountSchema = z.object({

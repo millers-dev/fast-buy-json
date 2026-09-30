@@ -25,6 +25,7 @@ export interface AddToCartRequest {
   extensions?: {
     [k: string]: unknown;
   };
+  [k: string]: unknown;
 }
 
 /**

@@ -29,13 +29,23 @@ import {
   applyProductFilters,
   buildDetectCapabilities,
   buildShippingOptionViews,
+  findShippingOption,
   lookupPromo,
   recomputeCartTotals,
-  SHIPPING_CATALOG,
 } from "./commerce.js";
 import { validateBody } from "./validation.js";
 
-const SPEC_VERSION = "0.5.0";
+const SPEC_VERSION = "1.0.0";
+
+function echoExtensions(value) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return structuredClone(value);
+}
 
 // Mock database
 const db = {
@@ -466,7 +476,7 @@ apiRouter.post(
   validateBody("add-to-cart"),
   idempotencyMiddleware,
   (req, res) => {
-  const { productId, quantity = 1, options = {} } = req.body;
+  const { productId, quantity = 1, options = {}, extensions } = req.body;
 
   const product = db.products.find((p) => p.id === productId);
   if (!product) {
@@ -511,9 +521,18 @@ apiRouter.post(
       JSON.stringify(item.options) === JSON.stringify(options)
   );
 
+  const echoedExtensions = echoExtensions(extensions);
+
+  if (echoedExtensions !== undefined) {
+    cart.extensions = echoedExtensions;
+  }
+
   if (existingItemIndex >= 0) {
     // Update quantity if item exists
     cart.items[existingItemIndex].quantity += quantity;
+    if (echoedExtensions !== undefined) {
+      cart.items[existingItemIndex].extensions = echoedExtensions;
+    }
   } else {
     // Add new item if it doesn't exist
     let variant = product;
@@ -533,7 +552,7 @@ apiRouter.post(
       }
     }
 
-    cart.items.push({
+    const lineItem = {
       itemId: uuidv4(),
       productId: variant.id,
       name: product.name,
@@ -544,7 +563,11 @@ apiRouter.post(
         amount: variant.price.amount * quantity,
         currency: variant.price.currency,
       },
-    });
+    };
+    if (echoedExtensions !== undefined) {
+      lineItem.extensions = echoedExtensions;
+    }
+    cart.items.push(lineItem);
   }
 
   recomputeCartTotals(cart);
@@ -754,6 +777,7 @@ apiRouter.post(
     customerInfo,
     shippingOptionId,
     discountCode,
+    extensions,
   } = req.body;
   const userId = requestUserId(req);
 
@@ -787,8 +811,13 @@ apiRouter.post(
     cart.appliedPromoCode = promo.code;
   }
 
+  const checkoutExtensions = echoExtensions(extensions);
+  if (checkoutExtensions !== undefined) {
+    cart.extensions = checkoutExtensions;
+  }
+
   if (shippingOptionId) {
-    const option = SHIPPING_CATALOG.find((entry) => entry.id === shippingOptionId);
+    const option = findShippingOption(shippingOptionId);
     if (!option) {
       return sendProblem(res, {
         status: 400,
@@ -827,6 +856,7 @@ apiRouter.post(
       score: riskScore,
       verificationRequired: true,
     },
+    ...(checkoutExtensions !== undefined ? { extensions: checkoutExtensions } : {}),
   };
 
   res.json({
@@ -967,6 +997,11 @@ apiRouter.post(
       timestamp: new Date().toISOString(),
     },
   };
+
+  const sessionExtensions = db.carts[userId].checkoutSession.extensions;
+  if (sessionExtensions !== undefined) {
+    order.extensions = structuredClone(sessionExtensions);
+  }
 
   // Store order
   db.orders[orderId] = order;
