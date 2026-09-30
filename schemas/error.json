@@ -15,7 +15,7 @@
             "format": "uri",
             "description": "URI reference identifying the problem type",
             "examples": [
-                "https://fastbuyjson.dev/errors/validation"
+                "https://fastbuyjson.org/problems/validation-error"
             ]
         },
         "title": {

@@ -34,7 +34,17 @@ async function request(method, path, { headers = {}, body } = {}) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const json = await response.json().catch(() => null);
-  return { status: response.status, json };
+  const responseHeaders = {};
+  response.headers.forEach((value, key) => {
+    responseHeaders[key.toLowerCase()] = value;
+  });
+  return { status: response.status, json, headers: responseHeaders };
+}
+
+function expectProblem(body, { status, code }) {
+  assert.equal(body?.status, status);
+  assert.equal(body?.code, code);
+  assert.ok(body?.type?.includes("/problems/"));
 }
 
 async function login(username = "demo", password = "password123") {
@@ -160,8 +170,45 @@ test("sorts products by name", async () => {
 });
 
 test("rejects invalid bearer tokens", async () => {
-  const { status } = await request("GET", `${API}/cart`, {
+  const { status, json, headers } = await request("GET", `${API}/cart`, {
     headers: { Authorization: "Bearer not-a-jwt" },
   });
   assert.equal(status, 401);
+  assert.ok(headers["content-type"]?.startsWith("application/problem+json"));
+  expectProblem(json, { status: 401, code: "INVALID_TOKEN" });
+  assert.match(headers["www-authenticate"] || "", /Bearer/i);
+});
+
+test("detect advertises specVersion 0.2.0", async () => {
+  const { status, json, headers } = await request("GET", `${API}/detect`);
+  assert.equal(status, 200);
+  assert.equal(json.standard, "FastBuyJSON");
+  assert.equal(json.specVersion, "0.2.0");
+  assert.equal(json.implementationVersion, "0.2.0");
+  assert.equal(headers["cache-control"], "public, max-age=300");
+});
+
+test("404 product responses are problem+json", async () => {
+  const { status, json, headers } = await request("POST", `${API}/cart/add`, {
+    body: { productId: "missing-product", quantity: 1 },
+  });
+  assert.equal(status, 404);
+  assert.ok(headers["content-type"]?.startsWith("application/problem+json"));
+  expectProblem(json, { status: 404, code: "PRODUCT_NOT_FOUND" });
+});
+
+test("idempotent replay sets Idempotency-Replayed header", async () => {
+  const key = "idem-header-test";
+  const first = await request("POST", `${API}/cart/add`, {
+    headers: { "Idempotency-Key": key },
+    body: { productId: "acme-wh-001", quantity: 1 },
+  });
+  assert.equal(first.status, 200);
+
+  const replay = await request("POST", `${API}/cart/add`, {
+    headers: { "Idempotency-Key": key },
+    body: { productId: "acme-wh-001", quantity: 1 },
+  });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.headers["idempotency-replayed"], "true");
 });

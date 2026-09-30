@@ -1,13 +1,16 @@
-from fastapi import FastAPI, Request, Response, HTTPException, Header, Depends, Body
+import copy
+import os
+import re
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
+
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from typing import Optional, Dict, Any, List
-from uuid import uuid4
-from datetime import datetime, timedelta
-import json
-import os
-import copy
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, EmailStr, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from auth import (
     authenticate_user,
@@ -18,16 +21,33 @@ from auth import (
     get_current_user,
     get_request_user_id,
 )
+from errors import ProblemException, problem_exception_handler
+
+SPEC_VERSION = "0.2.0"
 
 app = FastAPI(
     title="FastBuyJSON Demo API",
     description="Demo server for the FastBuyJSON e-commerce API standard",
-    version="0.1.0",
+    version=SPEC_VERSION,
 )
 
 # Create a sub-application for the standardized API path
 api_router = FastAPI()
+api_router.add_exception_handler(ProblemException, problem_exception_handler)
+api_router.add_exception_handler(RequestValidationError, problem_exception_handler)
+api_router.add_exception_handler(HTTPException, problem_exception_handler)
+api_router.add_exception_handler(StarletteHTTPException, problem_exception_handler)
 app.mount("/api/fastbuyjson", api_router)
+
+
+@api_router.middleware("http")
+async def cache_control_middleware(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.rstrip("/").endswith("/detect"):
+        response.headers["Cache-Control"] = "public, max-age=300"
+    else:
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 _cors_origins = [
     origin.strip()
@@ -211,7 +231,12 @@ async def login(login_data: LoginRequest):
     """
     user = authenticate_user(login_data.username, login_data.password)
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+        raise ProblemException(
+            status_code=401,
+            code="INVALID_CREDENTIALS",
+            title="Authentication failed",
+            detail="Invalid username or password",
+        )
 
     # Generate tokens
     access_token = create_access_token(
@@ -241,7 +266,12 @@ async def refresh(refresh_data: RefreshTokenRequest):
     """
     result = refresh_access_token(refresh_data.refresh_token)
     if not result:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+        raise ProblemException(
+            status_code=401,
+            code="INVALID_REFRESH_TOKEN",
+            title="Invalid refresh token",
+            detail="Token may be expired or invalid",
+        )
 
     return result
 
@@ -255,7 +285,12 @@ async def certificate_verify(cert_data: CertificateRequest):
     """
     result = verify_certificate(cert_data.certificate)
     if not result:
-        raise HTTPException(status_code=401, detail="Certificate verification failed")
+        raise ProblemException(
+            status_code=401,
+            code="CERTIFICATE_VERIFICATION_FAILED",
+            title="Certificate verification failed",
+            detail="Invalid or expired certificate",
+        )
 
     return result
 
@@ -269,8 +304,9 @@ async def detect_fastbuyjson():
     Returns basic information about the API implementation.
     """
     return {
-        "standard": "FastBuyJSON 0.1.0",
-        "implementationVersion": "0.1.0",
+        "standard": "FastBuyJSON",
+        "specVersion": SPEC_VERSION,
+        "implementationVersion": SPEC_VERSION,
         "supportedFeatures": [
             "idempotency",
             "pagination",
@@ -368,7 +404,11 @@ async def add_to_cart(
 ):
     if idempotency_key and idempotency_key in processed_idempotency_keys:
         cached = processed_idempotency_keys[idempotency_key]
-        return JSONResponse(status_code=cached["status"], content=cached["body"])
+        return JSONResponse(
+            status_code=cached["status"],
+            content=cached["body"],
+            headers={"Idempotency-Replayed": "true", "Cache-Control": "no-store"},
+        )
 
     data = await request.json()
     product_id = data.get("productId")
@@ -492,10 +532,34 @@ async def get_cart_by_id(cart_id: str, authorization: Optional[str] = Header(Non
     )
 
 
+def _idempotency_cached_response(idempotency_key: Optional[str]) -> Optional[JSONResponse]:
+    if not idempotency_key:
+        return None
+    cached = processed_idempotency_keys.get(idempotency_key)
+    if not cached:
+        return None
+    return JSONResponse(
+        status_code=cached["status"],
+        content=cached["body"],
+        headers={"Idempotency-Replayed": "true", "Cache-Control": "no-store"},
+    )
+
+
+def _store_idempotency(idempotency_key: Optional[str], status: int, body: Dict[str, Any]) -> None:
+    if idempotency_key and 200 <= status < 300:
+        processed_idempotency_keys[idempotency_key] = {"status": status, "body": body}
+
+
 @api_router.post("/checkout/initiate")
 async def initiate_checkout(
-    request: Request, authorization: Optional[str] = Header(None)
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
+    replay = _idempotency_cached_response(idempotency_key)
+    if replay:
+        return replay
+
     data = await request.json()
     cart_id = data.get("cartId")
     shipping_address = data.get("shippingAddress")
@@ -524,9 +588,6 @@ async def initiate_checkout(
             status_code=400,
             detail={"error": "Customer email and phone number are required"},
         )
-
-    # Validate email format
-    import re
 
     email_regex = r"^[^\s@]+@[^\s@]+\.[^\s@]+$"
     if not re.match(email_regex, customer_info.get("email", "")):
@@ -573,19 +634,27 @@ async def initiate_checkout(
         "riskAssessment": {"score": risk_score, "verificationRequired": True},
     }
 
-    return {
+    payload = {
         "sessionToken": session_token,
         "verificationToken": verification_token,
         "expiresAt": expires_at.isoformat(),
         "cart": DB["carts"][user_id],
         "riskAssessment": DB["checkout_sessions"][session_token]["riskAssessment"],
     }
+    _store_idempotency(idempotency_key, 200, payload)
+    return payload
 
 
 @api_router.post("/checkout/confirm")
 async def confirm_checkout(
-    request: Request, authorization: Optional[str] = Header(None)
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
+    replay = _idempotency_cached_response(idempotency_key)
+    if replay:
+        return replay
+
     data = await request.json()
     session_token = data.get("sessionToken")
     payment_details = data.get("paymentDetails")
@@ -732,12 +801,14 @@ async def confirm_checkout(
     del DB["checkout_sessions"][session_token]
     del DB["carts"][user_id]
 
-    return {
+    payload = {
         "order": order,
-        "orderId": order_id,  # Explicitly include orderId for easy reference
-        "orderStatusUrl": f"/api/fastbuyjson/orders/{order_id}",  # Include URL for status checks
+        "orderId": order_id,
+        "orderStatusUrl": f"/api/fastbuyjson/orders/{order_id}",
         "message": "Order confirmed successfully",
     }
+    _store_idempotency(idempotency_key, 200, payload)
+    return payload
 
 
 @api_router.get("/orders/{order_id}")

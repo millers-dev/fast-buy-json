@@ -6,6 +6,7 @@
 
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import { sendProblem } from './errors.js';
 
 function requireSecret(name, fallback) {
   const value = process.env[name];
@@ -218,27 +219,40 @@ export function verifyJwtMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({
-      error: 'Authentication required',
-      message: 'Valid Bearer token required'
+    return sendProblem(res, {
+      status: 401,
+      code: 'AUTHENTICATION_REQUIRED',
+      title: 'Authentication required',
+      detail: 'Valid Bearer token required',
+      instance: req.path,
     });
   }
-  
-  // Extract token
+
   const token = authHeader.split(' ')[1];
-  
+  if (!token || !token.trim()) {
+    return sendProblem(res, {
+      status: 401,
+      code: 'INVALID_TOKEN',
+      title: 'Invalid token',
+      detail: 'Bearer token is missing or empty',
+      instance: req.path,
+    });
+  }
+
   try {
-    // Verify token
     const decoded = jwt.verify(token, JWT_SECRET);
-    
+
     req.user = decoded;
     req.userId = decoded.sub;
-    
+
     next();
   } catch (error) {
-    return res.status(401).json({
-      error: 'Invalid token',
-      message: error.message
+    return sendProblem(res, {
+      status: 401,
+      code: 'INVALID_TOKEN',
+      title: 'Invalid token',
+      detail: error.message,
+      instance: req.path,
     });
   }
 }
@@ -291,6 +305,16 @@ export function optionalJwtMiddleware(req, res, next) {
   if (!authHeader) {
     req.userId = 'anonymous';
     return next();
+  }
+
+  if (!authHeader.startsWith('Bearer ')) {
+    return sendProblem(res, {
+      status: 401,
+      code: 'INVALID_TOKEN',
+      title: 'Invalid token',
+      detail: 'Authorization header must use Bearer scheme',
+      instance: req.path,
+    });
   }
 
   return verifyJwtMiddleware(req, res, next);

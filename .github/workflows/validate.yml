@@ -26,6 +26,15 @@ jobs:
       - name: Validate schemas and examples
         run: python scripts/validate_schemas.py
 
+      - name: Check OpenAPI drift
+        run: python scripts/build_openapi.py --check
+
+      - name: Validate OpenAPI spec
+        run: openapi-spec-validator openapi/fastbuyjson.yaml
+
+      - name: Check version alignment
+        run: python scripts/check_versions.py
+
       - name: Run Python API tests
         run: python -m pytest tests/test_python_server.py
 
@@ -38,7 +47,10 @@ jobs:
         run: npm install
 
       - name: Syntax-check demo server
-        run: node --check src/server.js && node --check src/auth.js
+        run: node --check src/server.js && node --check src/auth.js && node --check src/errors.js
 
       - name: Run Node API tests
         run: npm test
+
+      - name: Build MCP server
+        run: npm run mcp:build

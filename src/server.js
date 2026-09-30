@@ -17,6 +17,9 @@ import {
   verifyCertificate,
   optionalJwtMiddleware,
 } from "./auth.js";
+import { sendProblem } from "./errors.js";
+
+const SPEC_VERSION = "0.2.0";
 
 // Mock database
 const db = {
@@ -116,6 +119,15 @@ app.use(helmet());
 
 app.use("/api/fastbuyjson", apiRouter);
 
+apiRouter.use((req, res, next) => {
+  if (req.method === "GET" && req.path === "/detect") {
+    res.set("Cache-Control", "public, max-age=300");
+  } else {
+    res.set("Cache-Control", "no-store");
+  }
+  next();
+});
+
 const processedIdempotencyKeys = new Map();
 
 function idempotencyMiddleware(req, res, next) {
@@ -127,6 +139,7 @@ function idempotencyMiddleware(req, res, next) {
 
   const cached = processedIdempotencyKeys.get(idempotencyKey);
   if (cached) {
+    res.set("Idempotency-Replayed", "true");
     return res.status(cached.status).json(cached.body);
   }
 
@@ -212,18 +225,27 @@ apiRouter.post("/auth/login", (req, res) => {
 
   // Validate required fields
   if (!username || !password) {
-    return res.status(400).json({
-      error: "Missing required fields",
-      required: ["username", "password"],
+    return sendProblem(res, {
+      status: 400,
+      code: "VALIDATION_ERROR",
+      title: "Validation failed",
+      detail: "username and password are required",
+      instance: req.path,
+      errors: [
+        ...(!username ? [{ field: "username", message: "is required" }] : []),
+        ...(!password ? [{ field: "password", message: "is required" }] : []),
+      ],
     });
   }
 
-  // Authenticate user
   const user = authenticateUser(username, password);
   if (!user) {
-    return res.status(401).json({
-      error: "Authentication failed",
-      message: "Invalid username or password",
+    return sendProblem(res, {
+      status: 401,
+      code: "INVALID_CREDENTIALS",
+      title: "Authentication failed",
+      detail: "Invalid username or password",
+      instance: req.path,
     });
   }
 
@@ -247,18 +269,24 @@ apiRouter.post("/auth/refresh", (req, res) => {
 
   // Validate required fields
   if (!refresh_token) {
-    return res.status(400).json({
-      error: "Missing required fields",
-      required: ["refresh_token"],
+    return sendProblem(res, {
+      status: 400,
+      code: "VALIDATION_ERROR",
+      title: "Validation failed",
+      detail: "refresh_token is required",
+      instance: req.path,
+      errors: [{ field: "refresh_token", message: "is required" }],
     });
   }
 
-  // Refresh token
   const result = refreshAccessToken(refresh_token);
   if (!result) {
-    return res.status(401).json({
-      error: "Invalid refresh token",
-      message: "Token may be expired or invalid",
+    return sendProblem(res, {
+      status: 401,
+      code: "INVALID_REFRESH_TOKEN",
+      title: "Invalid refresh token",
+      detail: "Token may be expired or invalid",
+      instance: req.path,
     });
   }
 
@@ -278,18 +306,24 @@ apiRouter.post("/auth/certificate", (req, res) => {
 
   // Validate required fields
   if (!certificate) {
-    return res.status(400).json({
-      error: "Missing required fields",
-      required: ["certificate"],
+    return sendProblem(res, {
+      status: 400,
+      code: "VALIDATION_ERROR",
+      title: "Validation failed",
+      detail: "certificate is required",
+      instance: req.path,
+      errors: [{ field: "certificate", message: "is required" }],
     });
   }
 
-  // Verify certificate
   const result = verifyCertificate(certificate);
   if (!result) {
-    return res.status(401).json({
-      error: "Certificate verification failed",
-      message: "Invalid or expired certificate",
+    return sendProblem(res, {
+      status: 401,
+      code: "CERTIFICATE_VERIFICATION_FAILED",
+      title: "Certificate verification failed",
+      detail: "Invalid or expired certificate",
+      instance: req.path,
     });
   }
 
@@ -305,8 +339,9 @@ apiRouter.post("/auth/certificate", (req, res) => {
  */
 apiRouter.get("/detect", (req, res) => {
   res.json({
-    standard: "FastBuyJSON 0.1.0",
-    implementationVersion: "0.1.0",
+    standard: "FastBuyJSON",
+    specVersion: SPEC_VERSION,
+    implementationVersion: SPEC_VERSION,
     supportedFeatures: [
       "idempotency",
       "pagination",
@@ -335,7 +370,7 @@ apiRouter.get("/detect", (req, res) => {
  * Product Search Endpoint
  * Accepts search parameters and returns matching products
  */
-apiRouter.post("/products/search", (req, res) => {
+apiRouter.post("/products/search", optionalJwtMiddleware, (req, res) => {
   const { query, filters, sort, page = 1, pageSize = 10 } = req.body;
 
   let results = [...db.products];
@@ -414,9 +449,12 @@ apiRouter.post("/cart/add", optionalJwtMiddleware, idempotencyMiddleware, (req, 
 
   const product = db.products.find((p) => p.id === productId);
   if (!product) {
-    return res.status(404).json({
-      error: "Product not found",
-      productId,
+    return sendProblem(res, {
+      status: 404,
+      code: "PRODUCT_NOT_FOUND",
+      title: "Product not found",
+      detail: `No product with id ${productId}`,
+      instance: req.path,
     });
   }
 
@@ -506,9 +544,12 @@ apiRouter.get("/cart", optionalJwtMiddleware, (req, res) => {
   const userId = requestUserId(req);
 
   if (!db.carts[userId]) {
-    return res.status(404).json({
-      error: "Cart not found",
-      userId,
+    return sendProblem(res, {
+      status: 404,
+      code: "CART_NOT_FOUND",
+      title: "Cart not found",
+      detail: "No cart exists for the current identity",
+      instance: req.path,
     });
   }
 
@@ -529,50 +570,81 @@ apiRouter.get("/cart/:cartId", optionalJwtMiddleware, (req, res) => {
     return res.json({ cart: ownedCart });
   }
 
-  return res.status(404).json({ error: "Cart not found", cartId });
+  return sendProblem(res, {
+    status: 404,
+    code: "CART_NOT_FOUND",
+    title: "Cart not found",
+    detail: `No cart with id ${cartId}`,
+    instance: req.path,
+  });
 });
 
 /**
  * Checkout - Initiate Endpoint
  * Starts the checkout process with shipping and billing information
  */
-apiRouter.post("/checkout/initiate", optionalJwtMiddleware, (req, res) => {
+apiRouter.post(
+  "/checkout/initiate",
+  optionalJwtMiddleware,
+  idempotencyMiddleware,
+  (req, res) => {
   const { cartId, shippingAddress, billingAddress, customerInfo } = req.body;
   const userId = requestUserId(req);
 
   // Validate cart exists
   if (!db.carts[userId] || db.carts[userId].id !== cartId) {
-    return res.status(404).json({
-      error: "Cart not found",
-      cartId,
+    return sendProblem(res, {
+      status: 404,
+      code: "CART_NOT_FOUND",
+      title: "Cart not found",
+      detail: `No cart with id ${cartId}`,
+      instance: req.path,
     });
   }
 
-  // Validate customer info (accept 'phone' or legacy 'phoneNumber')
   if (!customerInfo || !customerInfo.email) {
-    return res
-      .status(400)
-      .json({ error: "Customer email and phone number are required" });
+    return sendProblem(res, {
+      status: 400,
+      code: "VALIDATION_ERROR",
+      title: "Validation failed",
+      detail: "Customer email and phone number are required",
+      instance: req.path,
+    });
   }
 
-  // Normalize phone field
   const phoneValue = customerInfo.phone || customerInfo.phoneNumber;
   if (!phoneValue) {
-    return res
-      .status(400)
-      .json({ error: "Customer email and phone number are required" });
+    return sendProblem(res, {
+      status: 400,
+      code: "VALIDATION_ERROR",
+      title: "Validation failed",
+      detail: "Customer email and phone number are required",
+      instance: req.path,
+    });
   }
 
-  // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(customerInfo.email)) {
-    return res.status(400).json({ error: "Invalid email format" });
+    return sendProblem(res, {
+      status: 400,
+      code: "VALIDATION_ERROR",
+      title: "Validation failed",
+      detail: "Invalid email format",
+      instance: req.path,
+      errors: [{ field: "customerInfo.email", message: "Invalid email format" }],
+    });
   }
 
-  // Validate phone number format
   const phoneRegex = /^\+?[0-9\s\-\(\)]{8,20}$/;
   if (!phoneRegex.test(phoneValue)) {
-    return res.status(400).json({ error: "Invalid phone number format" });
+    return sendProblem(res, {
+      status: 400,
+      code: "VALIDATION_ERROR",
+      title: "Validation failed",
+      detail: "Invalid phone number format",
+      instance: req.path,
+      errors: [{ field: "customerInfo.phone", message: "Invalid phone number format" }],
+    });
   }
 
   // Store normalized phone back
@@ -586,9 +658,15 @@ apiRouter.post("/checkout/initiate", optionalJwtMiddleware, (req, res) => {
     !shippingAddress.country ||
     !shippingAddress.postalCode
   ) {
-    return res.status(400).json({
-      error: "Invalid shipping address",
-      required: ["line1", "city", "country", "postalCode"],
+    return sendProblem(res, {
+      status: 400,
+      code: "VALIDATION_ERROR",
+      title: "Validation failed",
+      detail: "Invalid shipping address",
+      instance: req.path,
+      errors: [
+        { field: "shippingAddress", message: "line1, city, country, and postalCode are required" },
+      ],
     });
   }
 
@@ -629,59 +707,73 @@ apiRouter.post("/checkout/initiate", optionalJwtMiddleware, (req, res) => {
  * Checkout - Confirm Endpoint
  * Completes the checkout process and creates an order
  */
-apiRouter.post("/checkout/confirm", optionalJwtMiddleware, (req, res) => {
+apiRouter.post(
+  "/checkout/confirm",
+  optionalJwtMiddleware,
+  idempotencyMiddleware,
+  (req, res) => {
   const { sessionToken, paymentDetails } = req.body;
   const userId = requestUserId(req);
 
-  // Validate session
   if (
     !db.carts[userId] ||
     !db.carts[userId].checkoutSession ||
     db.carts[userId].checkoutSession.sessionToken !== sessionToken
   ) {
-    return res.status(400).json({
-      error: "Invalid checkout session",
-      sessionToken,
+    return sendProblem(res, {
+      status: 400,
+      code: "INVALID_CHECKOUT_SESSION",
+      title: "Invalid checkout session",
+      detail: "Checkout session is missing or does not match",
+      instance: req.path,
     });
   }
 
-  // Check if session is expired
   const expiresAt = new Date(db.carts[userId].checkoutSession.expiresAt);
   if (expiresAt < new Date()) {
-    return res.status(400).json({
-      error: "Checkout session expired",
-      sessionToken,
+    return sendProblem(res, {
+      status: 400,
+      code: "CHECKOUT_SESSION_EXPIRED",
+      title: "Checkout session expired",
+      detail: "Start a new checkout session",
+      instance: req.path,
     });
   }
 
-  // Validate payment details (simplified for demo)
   if (!paymentDetails || !paymentDetails.method) {
-    return res.status(400).json({
-      error: "Invalid payment details",
-      required: ["method"],
+    return sendProblem(res, {
+      status: 400,
+      code: "INVALID_PAYMENT_DETAILS",
+      title: "Invalid payment details",
+      detail: "payment method is required",
+      instance: req.path,
     });
   }
 
-  // Reject cash on delivery payments
   if (paymentDetails.method === "cash_on_delivery") {
-    return res.status(400).json({
-      error: "Cash on delivery payments are not supported",
+    return sendProblem(res, {
+      status: 400,
+      code: "PAYMENT_METHOD_UNSUPPORTED",
+      title: "Payment method unsupported",
+      detail: "Cash on delivery payments are not supported",
+      instance: req.path,
     });
   }
 
-  // Validate transaction verification
   if (
     !paymentDetails.transactionVerification ||
     !paymentDetails.transactionVerification.verificationMethod ||
     !paymentDetails.transactionVerification.verificationToken
   ) {
-    return res.status(400).json({
-      error: "Transaction verification is required",
-      required: ["verificationMethod", "verificationToken"],
+    return sendProblem(res, {
+      status: 400,
+      code: "VERIFICATION_REQUIRED",
+      title: "Verification required",
+      detail: "transactionVerification with verificationMethod and verificationToken is required",
+      instance: req.path,
     });
   }
 
-  // Check verification method and token
   const validVerificationMethods = [
     "captcha",
     "email_confirmation",
@@ -695,13 +787,15 @@ apiRouter.post("/checkout/confirm", optionalJwtMiddleware, (req, res) => {
       paymentDetails.transactionVerification.verificationMethod
     )
   ) {
-    return res.status(400).json({
-      error: "Invalid verification method",
-      validMethods: validVerificationMethods,
+    return sendProblem(res, {
+      status: 400,
+      code: "INVALID_VERIFICATION_METHOD",
+      title: "Invalid verification method",
+      detail: "The verification method is not supported",
+      instance: req.path,
     });
   }
 
-  // For high-risk orders, require stronger verification
   const riskScore = db.carts[userId].checkoutSession.riskAssessment?.score || 0;
   if (
     riskScore > 50 &&
@@ -709,10 +803,12 @@ apiRouter.post("/checkout/confirm", optionalJwtMiddleware, (req, res) => {
       paymentDetails.transactionVerification.verificationMethod
     )
   ) {
-    return res.status(400).json({
-      error: "This order requires stronger verification due to risk assessment",
-      requiredMethods: ["sms_confirmation", "payment_provider_token"],
-      riskScore,
+    return sendProblem(res, {
+      status: 400,
+      code: "STRONGER_VERIFICATION_REQUIRED",
+      title: "Stronger verification required",
+      detail: "This order requires sms_confirmation or payment_provider_token",
+      instance: req.path,
     });
   }
 
@@ -720,8 +816,12 @@ apiRouter.post("/checkout/confirm", optionalJwtMiddleware, (req, res) => {
   const providedToken =
     paymentDetails.transactionVerification.verificationToken;
   if (!expectedToken || providedToken !== expectedToken) {
-    return res.status(400).json({
-      error: "Invalid verification token",
+    return sendProblem(res, {
+      status: 400,
+      code: "INVALID_VERIFICATION_TOKEN",
+      title: "Invalid verification token",
+      detail: "The verification token does not match the checkout session",
+      instance: req.path,
     });
   }
 
@@ -780,9 +880,12 @@ apiRouter.get("/orders/:orderId", optionalJwtMiddleware, (req, res) => {
   const order = db.orders[orderId];
 
   if (!order || order.userId !== userId) {
-    return res.status(404).json({
-      error: "Order not found",
-      orderId,
+    return sendProblem(res, {
+      status: 404,
+      code: "ORDER_NOT_FOUND",
+      title: "Order not found",
+      detail: `No order with id ${orderId}`,
+      instance: req.path,
     });
   }
 

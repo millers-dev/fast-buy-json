@@ -77,7 +77,7 @@ export class FastBuyJSONAdapter {
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl || process.env.FASTBUYJSON_API_URL || 'http://localhost:3000/api/fastbuyjson';
-    this.userAgent = 'FastBuyJSON-MCP-Server/0.1.0';
+    this.userAgent = 'FastBuyJSON-MCP-Server/0.2.0';
     
     this.client = axios.create({
       baseURL: this.baseUrl,

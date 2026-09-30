@@ -112,7 +112,7 @@ def verify_token(token: str) -> Optional[TokenData]:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         token_data = TokenData(**payload)
         return token_data
-    except jwt.PyJWTError:
+    except JWTError:
         return None
 
 
@@ -156,7 +156,7 @@ def refresh_access_token(refresh_token: str) -> Optional[Dict[str, Any]]:
             "expires_in": JWT_EXPIRES_IN
         }
         
-    except jwt.PyJWTError:
+    except JWTError:
         # Invalid token
         if refresh_token in REFRESH_TOKENS:
             del REFRESH_TOKENS[refresh_token]
