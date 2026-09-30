@@ -1,4 +1,4 @@
-# FastBuyJSON HTTP contract (0.4.0)
+# FastBuyJSON HTTP contract (0.5.0)
 
 This document describes the contract implemented by the reference Node and Python servers. The machine-readable spec is generated at [`openapi/fastbuyjson.yaml`](../openapi/fastbuyjson.yaml) from JSON Schemas in [`schemas/`](../schemas/).
 
@@ -139,9 +139,27 @@ With no discount and `standard` shipping, reference servers reproduce pre-0.4 ca
 
 `/detect` adds `capabilities` (filters, shipping, tax, discounts) and advertises `typed_filters`, `shipping_selection`, `tax_breakdown`, and `discounts` in `supportedFeatures`.
 
+## Request validation (0.5.0)
+
+Mutating and search endpoints validate JSON request bodies against `schemas/*.json` (Draft 07) in both reference servers before business rules run. Failures return **400** `VALIDATION_ERROR` with `errors[]`. Format assertions are limited to `uuid`, `email`, and `date-time` for Node/Python parity; `additionalProperties` remains open on request objects in 0.5.0.
+
+| Method | Path | Schema file |
+|--------|------|-------------|
+| `POST` | `/auth/login` | `login-request.json` |
+| `POST` | `/auth/refresh` | `refresh-request.json` |
+| `POST` | `/auth/certificate` | `certificate-request.json` |
+| `POST` | `/products/search` | `product-search.json` |
+| `POST` | `/cart/add` | `add-to-cart.json` |
+| `PATCH` | `/cart/items/{itemId}` | `cart-update-item.json` |
+| `POST` | `/cart/discount` | `cart-discount.json` |
+| `POST` | `/checkout/initiate` | `checkout-initiate.json` |
+| `POST` | `/checkout/confirm` | `checkout-confirm.json` |
+
+JWT and idempotency middleware run in the same order as before: optional JWT first, then schema validation, then idempotency on applicable routes.
+
 ## Versioning
 
-- OpenAPI `info.version`, packages, and `/detect` `specVersion` / `implementationVersion` are aligned at **0.4.0** for this release.
+- OpenAPI `info.version`, packages, and `/detect` `specVersion` / `implementationVersion` are aligned at **0.5.0** for this release.
 - `standard` in `/detect` is the string `FastBuyJSON` (not a versioned product name).
 
 ## Conformance

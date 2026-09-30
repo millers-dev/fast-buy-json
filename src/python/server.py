@@ -38,8 +38,9 @@ from commerce import (
     lookup_promo,
     recompute_cart_totals,
 )
+from validation import read_validated_json, validate_payload
 
-SPEC_VERSION = "0.4.0"
+SPEC_VERSION = "0.5.0"
 
 app = FastAPI(
     title="FastBuyJSON Demo API",
@@ -275,13 +276,14 @@ def calculate_risk_score(
 
 
 @api_router.post("/auth/login", response_model=TokenResponse)
-async def login(login_data: LoginRequest):
+async def login(request: Request):
     """
     Authenticate a user
 
     Authenticates a user with username and password and returns JWT tokens.
     """
-    user = authenticate_user(login_data.username, login_data.password)
+    login_data = await read_validated_json(request, "login-request", "/auth/login")
+    user = authenticate_user(login_data["username"], login_data["password"])
     if not user:
         raise ProblemException(
             status_code=401,
@@ -310,13 +312,14 @@ async def login(login_data: LoginRequest):
 
 
 @api_router.post("/auth/refresh", response_model=RefreshResponse)
-async def refresh(refresh_data: RefreshTokenRequest):
+async def refresh(request: Request):
     """
     Refresh JWT token
 
     Refreshes an expired JWT token using a refresh token.
     """
-    result = refresh_access_token(refresh_data.refresh_token)
+    refresh_data = await read_validated_json(request, "refresh-request", "/auth/refresh")
+    result = refresh_access_token(refresh_data["refresh_token"])
     if not result:
         raise ProblemException(
             status_code=401,
@@ -329,13 +332,16 @@ async def refresh(refresh_data: RefreshTokenRequest):
 
 
 @api_router.post("/auth/certificate", response_model=CertificateResponse)
-async def certificate_verify(cert_data: CertificateRequest):
+async def certificate_verify(request: Request):
     """
     Verify client certificate
 
     Verifies a client certificate for mutual TLS authentication.
     """
-    result = verify_certificate(cert_data.certificate)
+    cert_data = await read_validated_json(
+        request, "certificate-request", "/auth/certificate"
+    )
+    result = verify_certificate(cert_data["certificate"])
     if not result:
         raise ProblemException(
             status_code=401,
@@ -390,7 +396,7 @@ async def detect_fastbuyjson():
 
 @api_router.post("/products/search")
 async def search_products(request: Request):
-    data = await request.json()
+    data = await read_validated_json(request, "product-search", "/products/search")
 
     query = data.get("query", "")
     filters = data.get("filters", {})
@@ -453,6 +459,7 @@ async def add_to_cart(
     authorization: Optional[str] = Header(None),
 ):
     data = await request.json()
+    validate_payload("add-to-cart", data, instance="/cart/add")
     user_id = get_request_user_id(authorization)
     replay = await _idempotency_guard(
         scope=user_id,
@@ -601,23 +608,10 @@ async def update_cart_item(
 ):
     user_id = get_request_user_id(authorization)
     cart = _require_cart(user_id, f"/cart/items/{item_id}")
-    data = await request.json()
-    quantity = data.get("quantity")
-
-    if (
-        quantity is None
-        or not isinstance(quantity, int)
-        or isinstance(quantity, bool)
-        or quantity < 1
-    ):
-        raise ProblemException(
-            status_code=400,
-            code="VALIDATION_ERROR",
-            title="Validation failed",
-            detail="quantity must be an integer greater than or equal to 1",
-            instance=f"/cart/items/{item_id}",
-            errors=[{"field": "quantity", "message": "must be >= 1"}],
-        )
+    data = await read_validated_json(
+        request, "cart-update-item", f"/cart/items/{item_id}"
+    )
+    quantity = data["quantity"]
 
     item = next((line for line in cart["items"] if line.get("itemId") == item_id), None)
     if not item:
@@ -689,7 +683,7 @@ async def apply_cart_discount(
 ):
     user_id = get_request_user_id(authorization)
     cart = _require_cart(user_id, "/cart/discount")
-    data = await request.json()
+    data = await read_validated_json(request, "cart-discount", "/cart/discount")
     code = data.get("code")
 
     if code is None or code == "":
@@ -719,6 +713,7 @@ async def initiate_checkout(
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
     data = await request.json()
+    validate_payload("checkout-initiate", data, instance="/checkout/initiate")
     user_id = get_request_user_id(authorization)
     replay = await _idempotency_guard(
         scope=user_id,
@@ -746,46 +741,8 @@ async def initiate_checkout(
             instance="/checkout/initiate",
         )
 
-    # Validate customer info (accept either 'phone' or legacy 'phoneNumber')
-    if not customer_info or not customer_info.get("email"):
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "Customer email and phone number are required"},
-        )
-
-    # Normalize phone field: prefer 'phone', fallback to 'phoneNumber'
     phone_value = customer_info.get("phone") or customer_info.get("phoneNumber")
-    if not phone_value:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "Customer email and phone number are required"},
-        )
-
-    email_regex = r"^[^\s@]+@[^\s@]+\.[^\s@]+$"
-    if not re.match(email_regex, customer_info.get("email", "")):
-        raise HTTPException(status_code=400, detail={"error": "Invalid email format"})
-
-    # Validate phone number format
-    phone_regex = r"^\+?[0-9\s\-\(\)]{8,20}$"
-    if not re.match(phone_regex, phone_value):
-        raise HTTPException(
-            status_code=400, detail={"error": "Invalid phone number format"}
-        )
-
-    # Store normalized phone back into customer_info for downstream use
     customer_info["phone"] = phone_value
-
-    # Validate addresses
-    if not shipping_address or not all(
-        k in shipping_address for k in ["line1", "city", "country", "postalCode"]
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "Invalid shipping address",
-                "required": ["line1", "city", "country", "postalCode"],
-            },
-        )
 
     cart = DB["carts"][user_id]
     discount_code = data.get("discountCode")
@@ -864,6 +821,7 @@ async def confirm_checkout(
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
     data = await request.json()
+    validate_payload("checkout-confirm", data, instance="/checkout/confirm")
     user_id = get_request_user_id(authorization)
     replay = await _idempotency_guard(
         scope=user_id,
@@ -901,13 +859,6 @@ async def confirm_checkout(
             detail={"error": "Checkout session expired", "sessionToken": session_token},
         )
 
-    # Validate payment details
-    if not payment_details or "method" not in payment_details:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "Invalid payment details", "required": ["method"]},
-        )
-
     # Reject cash on delivery payments
     if payment_details.get("method") == "cash_on_delivery":
         raise HTTPException(
@@ -915,20 +866,7 @@ async def confirm_checkout(
             detail={"error": "Cash on delivery payments are not supported"},
         )
 
-    # Validate transaction verification
     verification = payment_details.get("transactionVerification", {})
-    if (
-        not verification
-        or not verification.get("verificationMethod")
-        or not verification.get("verificationToken")
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "Transaction verification is required",
-                "required": ["verificationMethod", "verificationToken"],
-            },
-        )
 
     # Check verification method
     valid_verification_methods = [

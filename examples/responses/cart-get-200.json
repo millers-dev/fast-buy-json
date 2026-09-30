@@ -1,0 +1,84 @@
+{
+  "cart": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "items": [
+      {
+        "itemId": "00000000-0000-4000-8000-000000000002",
+        "productId": "acme-wh-001-black",
+        "name": "ACME Wireless Headphones Pro",
+        "quantity": 1,
+        "options": {
+          "color": "black"
+        },
+        "price": {
+          "amount": 199.99,
+          "currency": "USD"
+        },
+        "lineTotal": {
+          "amount": 199.99,
+          "currency": "USD"
+        }
+      }
+    ],
+    "created": "2024-01-15T12:00:00.000Z",
+    "updated": "2024-01-15T12:00:00.000Z",
+    "appliedPromoCode": null,
+    "appliedDiscounts": [],
+    "shipping": {
+      "selectedOptionId": "standard",
+      "amount": {
+        "amount": 0,
+        "currency": "USD"
+      },
+      "options": [
+        {
+          "id": "standard",
+          "label": "Standard Shipping",
+          "amount": {
+            "amount": 0,
+            "currency": "USD"
+          },
+          "estimatedDelivery": {
+            "minDays": 3,
+            "maxDays": 5
+          },
+          "freeOver": {
+            "amount": 100,
+            "currency": "USD"
+          },
+          "description": "Delivered in 3–5 business days"
+        },
+        {
+          "id": "express",
+          "label": "Express Shipping",
+          "amount": {
+            "amount": 25,
+            "currency": "USD"
+          },
+          "estimatedDelivery": {
+            "minDays": 1,
+            "maxDays": 2
+          },
+          "description": "Delivered in 1–2 business days"
+        }
+      ]
+    },
+    "totals": {
+      "currency": "USD",
+      "subtotal": 199.99,
+      "discount": 0,
+      "taxableBase": 199.99,
+      "tax": 20,
+      "taxBreakdown": {
+        "rate": 0.1,
+        "taxableAmount": 199.99,
+        "amount": 20,
+        "label": "default",
+        "jurisdiction": "default"
+      },
+      "shipping": 0,
+      "discountBreakdown": [],
+      "total": 219.99
+    }
+  }
+}

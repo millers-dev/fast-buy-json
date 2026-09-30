@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED = "0.4.0"
+EXPECTED = "0.5.0"
 
 
 def read_text(path: Path) -> str:
@@ -41,6 +41,7 @@ def main() -> int:
     failures: list[str] = []
     failures.extend(check_package_json(ROOT / "package.json"))
     failures.extend(check_package_json(ROOT / "mcp-server" / "package.json"))
+    failures.extend(check_package_json(ROOT / "sdk" / "typescript" / "package.json"))
 
     openapi = read_text(ROOT / "openapi" / "base.yaml")
     if f"version: {EXPECTED}" not in openapi:

@@ -24,7 +24,7 @@ import { FastBuyJSONAdapter } from './adapter.js';
 const server = new Server(
   {
     name: 'fastbuyjson-mcp-server-reference',
-    version: '0.4.0',
+    version: '0.5.0',
   },
   {
     capabilities: {
@@ -41,14 +41,11 @@ const SearchProductsSchema = z.object({
   filters: z.object({
     brand: z.string().optional(),
     categories: z.array(z.string()).optional(),
-    category: z.string().optional(),
     priceRange: z.object({
       min: z.number().optional(),
       max: z.number().optional(),
       currency: z.string().optional(),
     }).optional(),
-    minPrice: z.number().optional(),
-    maxPrice: z.number().optional(),
     availability: z.array(z.string()).optional(),
     extensions: z.record(z.unknown()).optional(),
   }).optional(),
@@ -138,7 +135,6 @@ const tools: Tool[] = [
           properties: {
             brand: { type: 'string', description: 'Filter by brand' },
             categories: { type: 'array', items: { type: 'string' }, description: 'Match any category' },
-            category: { type: 'string', description: 'Legacy single category (mapped to categories[])' },
             priceRange: {
               type: 'object',
               properties: {
@@ -147,11 +143,9 @@ const tools: Tool[] = [
                 currency: { type: 'string' },
               },
             },
-            minPrice: { type: 'number', description: 'Legacy min price (mapped to priceRange.min)' },
-            maxPrice: { type: 'number', description: 'Legacy max price (mapped to priceRange.max)' },
             availability: { type: 'array', items: { type: 'string' } },
           },
-          description: 'Typed catalog filters (legacy flat price/category keys are mapped for one release)',
+          description: 'Typed catalog filters',
         },
         sort: {
           type: 'string',

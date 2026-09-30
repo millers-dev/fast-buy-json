@@ -7,7 +7,6 @@ import argparse
 import json
 import re
 import sys
-from copy import deepcopy
 from pathlib import Path
 
 import yaml
@@ -16,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMAS_DIR = ROOT / "schemas"
 BASE_PATH = ROOT / "openapi" / "base.yaml"
 OUTPUT_PATH = ROOT / "openapi" / "fastbuyjson.yaml"
+RESPONSE_MANIFEST = ROOT / "examples" / "responses" / "manifest.json"
+RESPONSES_DIR = ROOT / "examples" / "responses"
 
 GENERATED_HEADER = (
     "# GENERATED — DO NOT EDIT\n"
@@ -34,19 +35,27 @@ def title_to_component(title: str) -> str:
     return "".join(word[:1].upper() + word[1:] for word in words if word)
 
 
-def collapse_examples(node: object) -> object:
+def normalize_openapi_schema(node: object) -> object:
     if isinstance(node, dict):
         result: dict[str, object] = {}
         for key, value in node.items():
             if key == "$schema":
                 continue
             if key == "examples" and isinstance(value, list) and len(value) == 1:
-                result["example"] = collapse_examples(value[0])
+                result["example"] = normalize_openapi_schema(value[0])
                 continue
-            result[key] = collapse_examples(value)
+            result[key] = normalize_openapi_schema(value)
+        type_value = result.get("type")
+        if isinstance(type_value, list):
+            non_null = [item for item in type_value if item != "null"]
+            if "null" in type_value and len(non_null) == 1:
+                result["type"] = non_null[0]
+                result["nullable"] = True
+            else:
+                result["type"] = type_value
         return result
     if isinstance(node, list):
-        return [collapse_examples(item) for item in node]
+        return [normalize_openapi_schema(item) for item in node]
     return node
 
 
@@ -96,7 +105,7 @@ def load_component(schema_path: Path) -> tuple[str, dict[str, object]]:
     if not isinstance(title, str) or not title.strip():
         raise ValueError(f"{schema_path.name}: missing title")
     name = title_to_component(title)
-    body = collapse_examples(raw)
+    body = normalize_openapi_schema(raw)
     body.pop("title", None)
     converted = normalize_json_schema_for_oas(body)
     if not isinstance(converted, dict):
@@ -112,6 +121,31 @@ def build_components() -> dict[str, dict[str, object]]:
             raise ValueError(f"Duplicate component {name} from {path.name}")
         components[name] = schema
     return components
+
+
+def inject_response_examples(document: dict[str, object]) -> None:
+    if not RESPONSE_MANIFEST.exists():
+        return
+    manifest = json.loads(RESPONSE_MANIFEST.read_text(encoding="utf-8"))
+    paths = document.setdefault("paths", {})
+    for route_key, statuses in manifest.items():
+        method, path = route_key.split(" ", 1)
+        path_item = paths.get(path)
+        if not isinstance(path_item, dict):
+            continue
+        operation = path_item.get(method.lower())
+        if not isinstance(operation, dict):
+            continue
+        responses = operation.setdefault("responses", {})
+        for status_code, filename in statuses.items():
+            example_file = RESPONSES_DIR / filename
+            if not example_file.exists():
+                raise FileNotFoundError(f"Missing response example: {example_file}")
+            example = json.loads(example_file.read_text(encoding="utf-8"))
+            response = responses.setdefault(str(status_code), {})
+            content = response.setdefault("content", {})
+            json_content = content.setdefault("application/json", {})
+            json_content["example"] = example
 
 
 def load_base() -> dict[str, object]:
@@ -147,6 +181,7 @@ def main() -> int:
     components = build_components()
     base.setdefault("components", {})
     base["components"]["schemas"] = components
+    inject_response_examples(base)
 
     rendered = render_openapi(base)
 

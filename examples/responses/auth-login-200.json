@@ -1,0 +1,6 @@
+{
+  "access_token": "canonical-access-token",
+  "refresh_token": "canonical-refresh-token",
+  "token_type": "bearer",
+  "expires_in": 3600
+}
