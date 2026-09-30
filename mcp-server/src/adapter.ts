@@ -5,7 +5,13 @@
  * Handles HTTP communication, authentication, and data transformation.
  */
 
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import axios, {
+  AxiosError,
+  AxiosInstance,
+  AxiosRequestConfig,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+} from 'axios';
 
 export interface SearchFilters {
   brand?: string;
@@ -146,7 +152,7 @@ export class FastBuyJSONAdapter {
     });
 
     // Add request interceptor for authentication
-    this.client.interceptors.request.use((config) => {
+    this.client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
       if (this.sessionToken) {
         config.headers['Authorization'] = `Bearer ${this.sessionToken}`;
       }
@@ -160,8 +166,8 @@ export class FastBuyJSONAdapter {
 
     // Add response interceptor for error handling
     this.client.interceptors.response.use(
-      (response) => response,
-      (error) => {
+      (response: AxiosResponse) => response,
+      (error: AxiosError) => {
         if (error.response?.status === 401) {
           // Clear invalid session token
           this.sessionToken = undefined;
