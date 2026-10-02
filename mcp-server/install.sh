@@ -74,7 +74,7 @@ if [ -f "$CONFIG_FILE" ]; then
     echo "         \"command\": \"node\","
     echo "         \"args\": [\"$SERVER_PATH\"],"
     echo "         \"env\": {"
-    echo "           \"FASTBUYJSON_API_URL\": \"http://localhost:8000/api/fastbuyjson\""
+    echo "           \"FASTBUYJSON_API_URL\": \"http://localhost:3000/api/fastbuyjson\""
     echo "         }"
     echo "       }"
     echo "     }"
@@ -89,7 +89,7 @@ else
       "command": "node",
       "args": ["$SERVER_PATH"],
       "env": {
-        "FASTBUYJSON_API_URL": "http://localhost:8000/api/fastbuyjson"
+        "FASTBUYJSON_API_URL": "http://localhost:3000/api/fastbuyjson"
       }
     }
   }

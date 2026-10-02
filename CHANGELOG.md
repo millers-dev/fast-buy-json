@@ -88,12 +88,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Recovered baseline snapshot after local tree loss: JSON Schemas (`schemas/`), reconstructed OpenAPI (`openapi/fastbuyjson.yaml`), Node.js and Python demo APIs, reference MCP server, Postman collection, and schema validation CI.
+- JSON Schemas (`schemas/`), OpenAPI (`openapi/fastbuyjson.yaml`), Node.js and Python demo APIs, reference MCP server, Postman collection, and schema validation CI.
 
 ### Changed
 
-- Version labels aligned to **0.1.0** across packages, OpenAPI `info.version`, `/detect` (`standard` and `implementationVersion`), and MCP server metadata. Replaces premature **1.0.0** labels that did not match the recovered implementation maturity.
+- Version labels aligned to **0.1.0** across packages, OpenAPI `info.version`, `/detect` (`standard` and `implementationVersion`), and MCP server metadata. Replaces premature **1.0.0** labels on this 0.1.0 release.
 
 ### Notes
 
-- This release documents the restored reference implementation, not a finalized 1.0 protocol contract.
+- This release documents the reference implementation, not a finalized 1.0 protocol contract.

@@ -1,51 +1,22 @@
 # FastBuyJSON
 
-FastBuyJSON is a JSON-based contract for LLM agents talking to e-commerce APIs. It covers product search, cart, checkout, and order status with strict schemas, idempotent writes, and a machine-readable discovery endpoint.
+FastBuyJSON is a JSON contract for agents that search a catalog, manage a cart, check out, and read order status. This repository is the open-source contract plus reference HTTP servers, a local TypeScript SDK, and a stdio MCP server.
 
-This repository is the **open-source standard plus a reference implementation**. Recovered and restored from local editor history after the working tree was deleted.
+**Release:** `1.0.0`. See [`CHANGELOG.md`](CHANGELOG.md) and [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md).
 
-**Release:** `1.0.0` — stable 1.x line with `extensions` round-trip, hook registry, and [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md). See [`CHANGELOG.md`](CHANGELOG.md).
+Private commercial hosting may exist and is outside this repository.
 
-## What is in this repo
+## Start here
 
-```
-fast-buy-json/
-├── openapi/base.yaml            # Hand-authored paths/responses (no schemas)
-├── openapi/fastbuyjson.yaml   # Generated OpenAPI (do not edit by hand)
-├── schemas/                   # JSON Schema (draft-07) — single source of truth
-├── examples/                  # Sample request/response payloads
-├── sdk/typescript/            # @fastbuyjson/sdk (ESM, zero runtime deps)
-├── src/server.js              # Node.js demo API
-├── src/python/                # FastAPI demo API (same contract)
-├── mcp-server/                # Reference MCP server for Claude Desktop
-├── postman/                   # Collection + environment
-└── scripts/validate_schemas.py
-```
+- [Getting started](docs/GETTING_STARTED.md) — Node and Python demos, demo users, and how the MCP server finds the API
+- [Integrations](docs/INTEGRATIONS.md) — Claude Desktop, Cursor, and the ChatGPT HTTPS limit
+- [TypeScript SDK](docs/SDK.md) — local `@fastbuyjson/sdk`
+- [HTTP contract](docs/CONTRACT.md) — behavior, problem+json codes, and headers
+- [MCP server](mcp-server/README.md) — stdio tools, including shipping and discount
 
-Commercial multi-tenant hosting, billing, and dashboards live in the private [fast-buy-json-saas](https://github.com/millers-dev/fast-buy-json-saas) repo.
+## Quick start
 
-## HTTP contract
-
-Base path: `/api/fastbuyjson`
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/detect` | Feature discovery for agents |
-| `POST` | `/auth/login` | JWT login |
-| `POST` | `/auth/refresh` | Refresh access token |
-| `POST` | `/auth/certificate` | Certificate session |
-| `POST` | `/products/search` | Catalog search |
-| `POST` | `/cart/add` | Add line item (`Idempotency-Key` supported) |
-| `GET` | `/cart` or `/cart/{cartId}` | Cart snapshot |
-| `POST` | `/checkout/initiate` | Start checkout session |
-| `POST` | `/checkout/confirm` | Confirm payment / create order |
-| `GET` | `/orders/{orderId}` | Order status |
-
-OpenAPI: [`openapi/fastbuyjson.yaml`](openapi/fastbuyjson.yaml) (generated). Contract notes: [`docs/CONTRACT.md`](docs/CONTRACT.md). Changelog: [`CHANGELOG.md`](CHANGELOG.md).
-
-## Quick start (Node demo)
-
-Requires Node.js 18+.
+Node.js 18+.
 
 ```bash
 npm install
@@ -55,85 +26,34 @@ npm start
 
 API: <http://localhost:3000/api/fastbuyjson>
 
-Demo users (in-memory only):
+Python, demo users, Postman, and MCP setup are in [Getting started](docs/GETTING_STARTED.md).
 
-- `demo` / `password123`
-- `admin` / `admin123`
+## What is in this repo
 
-## Quick start (Python demo)
-
-Requires Python 3.11+.
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-npm run start:python
+```
+fast-buy-json/
+├── docs/                      # Contract, compatibility, and user guides
+├── openapi/base.yaml          # Hand-authored paths/responses (no schemas)
+├── openapi/fastbuyjson.yaml   # Generated OpenAPI (do not edit by hand)
+├── schemas/                   # JSON Schema (draft-07) — single source of truth
+├── examples/                  # Sample request/response payloads
+├── sdk/typescript/            # @fastbuyjson/sdk (ESM, zero runtime deps)
+├── src/server.js              # Node.js demo API
+├── src/python/                # FastAPI demo API (same contract)
+├── mcp-server/                # Reference stdio MCP server
+├── postman/                   # Collection + environment (Python port 8000)
+└── scripts/validate_schemas.py
 ```
 
-API: <http://localhost:8000/api/fastbuyjson>  
-Interactive docs: <http://localhost:8000/docs>
-
-The Postman environment points at the Python port by default.
-
-## MCP server (Claude Desktop)
+## Checks
 
 ```bash
-cd mcp-server
-npm install
-npm run build
-./install.sh
-```
-
-The reference server talks to a running FastBuyJSON API (`FASTBUYJSON_API_URL`). A mock-only entry point is `src/index-mock.ts`.
-
-See [`mcp-server/README.md`](mcp-server/README.md) and [`mcp-server/EXAMPLES.md`](mcp-server/EXAMPLES.md).
-
-## Validation
-
-```bash
-pip install -r requirements.txt
-python scripts/validate_schemas.py
-node scripts/capture_examples.mjs
-python scripts/build_openapi.py --check
-node scripts/capture_examples.mjs --check
-openapi-spec-validator openapi/fastbuyjson.yaml
-python scripts/check_versions.py
 npm test
-python -m pytest tests/test_python_server.py conformance/harness/python
-npm run sdk:install && npm run check:sdk-types
+npm run test:python
 npm run mcp:test
 ```
 
-CI runs these gates on every pull request.
-
-## TypeScript SDK
-
-```bash
-npm run sdk:install
-npm run sdk:generate-types
-npm --prefix sdk/typescript run build
-```
-
-Import `@fastbuyjson/sdk` from `sdk/typescript/` (local path; not published to npm in 1.0.0).
-
-## Recovery notes
-
-Source snapshot: VS Code Local History + Copilot chat sessions, 2026-09-20.
-
-Reconstructed after recovery (original files were empty or purged):
-
-- Root `package.json`
-- `openapi/fastbuyjson.yaml` (from `schemas/`, `postman/`, and demo servers)
-- README and MCP server docs
-- Schema validation script / CI workflow
-
-Damaged files that were repaired:
-
-- `mcp-server/src/index.ts` (missing `zod` import; wired to the HTTP adapter)
-- `mcp-server/test.js` (corrupted header from a merge of two snapshots)
-- `mcp-server/src/mock-adapter.ts` (missing `confirmCheckout`)
-- `postman/fastbuyjson.postman_collection.json` (spliced "Get Cart by ID" into checkout URL)
+Schema, OpenAPI, example, and version checks: `npm run validate:schemas`, `npm run check:openapi`, `npm run check:examples`, `npm run check:versions`. Conformance cases are described in [`conformance/README.md`](conformance/README.md).
 
 ## License
 

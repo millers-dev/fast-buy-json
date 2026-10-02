@@ -2,6 +2,8 @@
 
 This document provides practical examples of how to use the FastBuyJSON MCP Server with AI assistants like Claude.
 
+The live server in `src/index.ts` exposes nine tools. The full list, including `fastbuy_get_shipping_options` and `fastbuy_apply_discount`, is in [README.md](README.md). Config samples below use the Node demo at `http://localhost:3000/api/fastbuyjson`. The Python demo is port 8000, and the Postman environment stays on 8000.
+
 ## Basic Shopping Workflow
 
 ### 1. Detect FastBuyJSON Support
@@ -208,7 +210,7 @@ Complete checkout after waiting 2 hours
       "command": "node",
       "args": ["/path/to/fastbuyjson-mcp-server/dist/index.js"],
       "env": {
-        "FASTBUYJSON_API_URL": "http://localhost:8000/api/fastbuyjson"
+        "FASTBUYJSON_API_URL": "http://localhost:3000/api/fastbuyjson"
       }
     }
   }
@@ -216,6 +218,8 @@ Complete checkout after waiting 2 hours
 ```
 
 ### Custom AI Assistant
+
+Illustrative only. `mcp_client` is not a dependency of this repository. Supported setups are the JSON configs in [../docs/INTEGRATIONS.md](../docs/INTEGRATIONS.md).
 
 ```python
 # Example Python integration
@@ -239,7 +243,7 @@ print(result)
 ```json
 {
   "env": {
-    "FASTBUYJSON_API_URL": "http://localhost:8000/api/fastbuyjson"
+    "FASTBUYJSON_API_URL": "http://localhost:3000/api/fastbuyjson"
   }
 }
 ```
