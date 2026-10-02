@@ -2,6 +2,8 @@
 
 Status: proposal only. This file does not change user docs. One follow-up pull request implements it after this plan is accepted.
 
+**Q5 override:** recovery content is deleted from user-facing docs. `docs/RECOVERY.md` is not created.
+
 Scope is the open-source FastBuyJSON **1.0.0** repository (`millers-dev/fast-buy-json`): the JSON contract, the Node and Python reference APIs, the TypeScript SDK, and the reference MCP server.
 
 ## 1. Goals
