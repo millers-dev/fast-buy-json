@@ -15,7 +15,7 @@ Checked against this repository at **1.0.0** (`docs/CONTRACT.md`, `schemas/order
 | Order creation | Still none. `POST /checkout/confirm` does not create an order. `confirmCreatesOrder` stays `false`. |
 | Buyer auth | Anonymous, same as the rest of this connector. A Bearer token is ignored. |
 | Addresses and card fragments | Omitted. No `shippingAddress`, `billingAddress`, `lastFourDigits`, or `brand`. Those fields are not selected and not declared. |
-| `delivered` | Not produced in this phase. |
+| `delivered` | Not produced in this phase. The follow-on map is [`SHOPIFY_DELIVERED_PLAN.md`](SHOPIFY_DELIVERED_PLAN.md). |
 
 Accepting this plan accepts those defaults. Section 10 lists them again so a review comment can overturn one without reopening the rest.
 
@@ -106,7 +106,7 @@ Paid means `displayFinancialStatus` is `PAID`. Unfulfilled means `displayFulfill
 
 2026-10 has no `SHIPPED` and no `PARTIAL` on `OrderDisplayFulfillmentStatus`. `FULFILLED` is the value that maps to `shipped`. `PARTIALLY_FULFILLED` maps to `processing`.
 
-This phase never sets `delivered`. It does not turn a fulfilled order into delivered after a number of days, and it does not read a tracking scan as delivered. The enum value remains in the contract schema. The connector leaves it unused.
+This phase never sets `delivered`. It does not turn a fulfilled order into delivered after a number of days, and it does not read a tracking scan as delivered. The enum value remains in the contract schema. The connector leaves it unused. How a later connector change may set it is [`SHOPIFY_DELIVERED_PLAN.md`](SHOPIFY_DELIVERED_PLAN.md).
 
 A cancelled order that was also refunded is `cancelled` (row 1). A fulfilled order whose financial status is `REFUNDED` is `refunded` (row 2), not `shipped`. A fulfilled order whose financial status is `PARTIALLY_REFUNDED` is `shipped` (row 3).
 
