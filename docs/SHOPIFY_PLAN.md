@@ -295,7 +295,7 @@ Local sequence:
 
 A merchant install, or a store outside the organization, uses the authorization code grant. `APP_URL` is an HTTPS origin Shopify can redirect to. Localhost HTTP is not a valid redirect. Use a tunnel for the callback only. The agent still uses `http://localhost:3100/api/fastbuyjson` on the machine where the process runs. There is no publicly hosted FastBuyJSON shop in this plan.
 
-`fastbuy_checkout_initiate` shows `checkoutUrl` because the tool prints the response JSON. `fastbuy_checkout_confirm` will fail. `mcp-server/src/adapter.ts` wraps HTTP errors as `Checkout confirmation failed: <client message>` and does not forward the problem body, so the tool error text may omit `detail` and `checkoutUrl`. The URL is already on the initiate result. v1 does not change the adapter. A later pull request in this repository can surface problem bodies if that tool text is too thin. It is not part of the connector sequence.
+`fastbuy_checkout_initiate` shows `checkoutUrl` because the tool prints the response JSON. `fastbuy_checkout_confirm` fails with `PAYMENT_METHOD_UNSUPPORTED`. The reference adapter (`mcp-server/src/adapter.ts`, `mcp-server/src/http-error.ts`) appends that RFC 9457 problem body to the tool error, including `detail` and `checkoutUrl`. The URL is already on the initiate result. The adapter change lives in this repository and is not part of the connector sequence.
 
 ChatGPT Developer Mode still has nothing to paste. The connector is a FastBuyJSON HTTP API. It is not a remote MCP server.
 
@@ -347,7 +347,7 @@ This repository needs no code change for that sequence. `docs/INTEGRATIONS.md` a
 
 **Contract drift.** Money strings, cursor pagination, estimated tax, one anonymous cart per process, stricter variant selection, and confirm that does not create an order are the drifts section 6 spells out. `/detect` is how an agent sees them. Silent compatibility with the demo seed catalog is not a goal.
 
-**Reference MCP error text.** Confirm’s problem body may not reach the model until a small follow-up in this repository. Initiate already returns `checkoutUrl` in the tool text. That is the handoff the agent uses.
+**Reference MCP error text.** Confirm’s problem body is included in the MCP tool error (`detail` and `checkoutUrl`). Initiate already returns `checkoutUrl` in the tool text. That is the handoff the agent uses.
 
 **API calendar.** 2026-10 falls out of support on 2026-10-16. A later pull request bumps the pin while the version is still supported. Requests that name a dead version are rewritten by Shopify to the oldest supported stable version, which is a quiet behavior change. The pin stays explicit.
 
@@ -377,7 +377,7 @@ FastBuyJSON, this repository, release 1.0.0:
 - `docs/INTEGRATIONS.md` — stdio MCP and `FASTBUYJSON_API_URL`.
 - `docs/DOCS_PLAN.md` — this repository’s user-doc boundary.
 - `schemas/product.json`, `schemas/cart.json`, `schemas/cart-item.json`, `schemas/checkout-initiate.json`, `schemas/checkout-initiate-response.json`, `schemas/checkout-confirm.json`, `schemas/error.json`, `schemas/shipping-option.json`, `schemas/money.json`.
-- `mcp-server/src/adapter.ts` — default API URL, checkout body (`state` rather than `region`), HTTP errors rethrown without the problem body.
+- `mcp-server/src/adapter.ts` — default API URL, checkout body (`state` rather than `region`). HTTP errors include the problem body when the response has one (`mcp-server/src/http-error.ts`).
 - `mcp-server/src/index.ts` — tool list. `fastbuy_add_to_cart` has no cart id. Initiate and confirm return adapter JSON or an error string.
 
 Shopify, read 2026-10-03. Storefront field pages linked at `2026-07` are the pages read that day. The connector still pins API `2026-10`. The catalog pull request re-checks those fields on `2026-10` before the mapper freezes.
