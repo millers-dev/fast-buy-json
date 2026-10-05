@@ -12,6 +12,7 @@ import axios, {
   AxiosResponse,
   InternalAxiosRequestConfig,
 } from 'axios';
+import { throwHttpError } from './http-error.js';
 
 export interface SearchFilters {
   brand?: string;
@@ -232,7 +233,7 @@ export class FastBuyJSONAdapter {
 
       return response.data;
     } catch (error) {
-      throw new Error(`Product search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throwHttpError('Product search', error);
     }
   }
 
@@ -263,7 +264,7 @@ export class FastBuyJSONAdapter {
 
       return response.data;
     } catch (error) {
-      throw new Error(`Add to cart failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throwHttpError('Add to cart', error);
     }
   }
 
@@ -287,7 +288,7 @@ export class FastBuyJSONAdapter {
 
       return response.data;
     } catch (error) {
-      throw new Error(`Get cart failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throwHttpError('Get cart', error);
     }
   }
 
@@ -299,9 +300,7 @@ export class FastBuyJSONAdapter {
       const response = await this.client.get('/shipping/options');
       return response.data;
     } catch (error) {
-      throw new Error(
-        `Get shipping options failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      throwHttpError('Get shipping options', error);
     }
   }
 
@@ -315,9 +314,7 @@ export class FastBuyJSONAdapter {
       }
       return response.data;
     } catch (error) {
-      throw new Error(
-        `Apply discount failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      throwHttpError('Apply discount', error);
     }
   }
 
@@ -340,7 +337,7 @@ export class FastBuyJSONAdapter {
 
       return response.data;
     } catch (error) {
-      throw new Error(`Checkout initiation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throwHttpError('Checkout initiation', error);
     }
   }
 
@@ -361,7 +358,7 @@ export class FastBuyJSONAdapter {
 
       return response.data;
     } catch (error) {
-      throw new Error(`Checkout confirmation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throwHttpError('Checkout confirmation', error);
     }
   }
 
@@ -373,7 +370,7 @@ export class FastBuyJSONAdapter {
       const response = await this.client.get(`/orders/${orderId}`);
       return response.data;
     } catch (error) {
-      throw new Error(`Get order status failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throwHttpError('Get order status', error);
     }
   }
 
@@ -393,7 +390,7 @@ export class FastBuyJSONAdapter {
 
       return response.data;
     } catch (error) {
-      throw new Error(`Login failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throwHttpError('Login', error);
     }
   }
 
