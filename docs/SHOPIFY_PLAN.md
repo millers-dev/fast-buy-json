@@ -329,7 +329,7 @@ Runtime default: Node.js 18+, TypeScript, global `fetch`, `node:test`. Pin `2026
 | 6. Checkout handoff | Initiate writes buyer and address, returns `checkoutUrl`. Confirm checks the session, then refuses payment. | URL is HTTPS. Cart `key` is absent. Bad session and bad verification use the contract codes. A valid session is `PAYMENT_METHOD_UNSUPPORTED`. The fixture records no `complete_checkout` call and no payment payload. |
 | 7. Shipping options | Delivery groups after an address exists. | No address → `options: []`. Options without day bounds are omitted and counted. |
 
-Order status is not in this sequence. It needs `read_orders` or Order webhooks, protected customer data, and a status map onto `confirmed` / `processing` / `shipped` / `delivered` / `cancelled` / `refunded`. That is a new plan after v1 has been used on a real development store.
+Order status is not in this sequence. It needs `read_orders` or Order webhooks, protected customer data, and a status map onto `confirmed` / `processing` / `shipped` / `delivered` / `cancelled` / `refunded`. That is a new plan after v1 has been used on a real development store. The order-status plan is [`SHOPIFY_ORDERS_PLAN.md`](SHOPIFY_ORDERS_PLAN.md).
 
 This repository needs no code change for that sequence. `docs/INTEGRATIONS.md` already says `FASTBUYJSON_API_URL` may be any compatible API.
 
