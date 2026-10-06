@@ -17,7 +17,7 @@ The defaults in section 1 were accepted on **2026-10-06** by Tomasz. Section 11 
 | End state | Anonymous `GET /orders/{orderId}` returns **401** `AUTHENTICATION_REQUIRED`. There is no anonymous status-only body. |
 | Another customer’s order | **404** `ORDER_NOT_FOUND`, the same problem body as an unknown id. |
 | JWT `sub` | `base64url(HMAC-SHA256(connectorSecret, customerGid))`. `connectorSecret` is `SHOPIFY_CUSTOMER_SUB_SECRET`. |
-| Agent handoff | Device-style. The connector returns `loginUrl` and a poll token. The buyer finishes Shopify login in a browser. The agent polls until the connector returns the JWT. |
+| Agent handoff | Device-style. `loginUrl` carries a public `loginId`. A separate `pollToken` comes back in the start body and is sent with `POST`. The browser shows a short user code the agent also shows. |
 | Addresses | When customer mode is the default, map `shippingAddress` and `billingAddress` for the owner. That same pull request removes `SHOPIFY_ORDER_ADDRESS_GATE` and `?email=`. |
 | Cart and checkout | Stay anonymous. One anonymous cart per process. Out of scope. |
 | Schema | `schemas/order-status.json` already allows the address objects. This plan does not edit it. |
@@ -54,7 +54,7 @@ The contract identity is the JWT `sub`. On this connector that string is:
 | Piece | Rule |
 | --- | --- |
 | `customerGid` | `Customer.id` from Customer Account API `customer { id }`. The connector accepts only a string matching `gid://shopify/Customer/` plus digits. Any other value fails the login. No JWT is issued. |
-| `connectorSecret` | Environment variable `SHOPIFY_CUSTOMER_SUB_SECRET`, UTF-8. The operator sets it. It is not `SHOPIFY_CLIENT_SECRET`, not `TOKEN_ENCRYPTION_KEY`, and not `JWT_SECRET`. |
+| `connectorSecret` | Environment variable `SHOPIFY_CUSTOMER_SUB_SECRET`, UTF-8, at least **32 bytes**. The operator sets it from a CSPRNG. It is not `SHOPIFY_CLIENT_SECRET`, not `TOKEN_ENCRYPTION_KEY`, and not `JWT_SECRET`. If the variable is set and shorter than 32 bytes, the process refuses to start. If it is unset, the process still starts, and login completion returns **500** `INTERNAL_ERROR`. |
 | HMAC | SHA-256, raw 32-byte digest. Node `crypto.createHmac('sha256', secret).update(customerGid, 'utf8').digest('base64url')`. |
 | `base64url` | The Node `base64url` digest. Unpadded. `+` and `/` do not appear. |
 | Stability | The same GID and the same secret always produce the same `sub`. The GID is not stored. A later `customers/redact` rebuilds the GID from the webhook and recomputes the HMAC to find the row. |
@@ -64,7 +64,7 @@ The contract identity is the JWT `sub`. On this connector that string is:
 
 A missing `SHOPIFY_CUSTOMER_SUB_SECRET` or `JWT_SECRET` fails login completion with **500** `INTERNAL_ERROR`. The body has no secret and no GID. While customer mode is on, the order route returns that same **500** when either secret is missing, rather than an anonymous order.
 
-Rotating `SHOPIFY_CUSTOMER_SUB_SECRET` changes every future `sub`. Existing JWTs stay valid until `exp` if `JWT_SECRET` is unchanged, and their `sub` will not match a new login for the same customer. This plan does not migrate sessions. The buyer logs in again after the old JWT expires. Rotating `JWT_SECRET` invalidates outstanding JWTs immediately.
+Rotating `SHOPIFY_CUSTOMER_SUB_SECRET` changes every future `sub`. Existing JWTs stay valid until `exp` if `JWT_SECRET` is unchanged, and their `sub` will not match a new login for the same customer. This plan does not migrate sessions. The buyer logs in again after the old JWT expires. `customers/redact` recomputes `sub` with the current secret, so a row written under the old secret is not found. That row stays until its customer access token expires and the lazy purge in section 7.2 deletes it. The GID is not stored, so there is no second index. Rotating `JWT_SECRET` invalidates outstanding JWTs immediately.
 
 The HMAC is not reversible from `sub`. Logs, the HTTP body, and `extensions` do not contain the GID or the secret.
 
@@ -104,7 +104,7 @@ The working hypothesis was: the app’s `[customer_authentication]` client can l
 | R4 | `order(id:)` on the Customer Account API is the ownership check. | Does not hold. `customer` returns the logged-in customer. `customer.orders` is that customer’s orders, and its filters include `name`, `confirmation_number`, and `id`. The `order` query is documented against the authentication-state labels `customer_read_unauthenticated`, `customer_read_pre_authenticated`, and `customer_read_payment_instrument_authenticated`. The access-scopes page says those labels record an authentication state, are not scopes the app requests, and points at the order status page. That page serves an unauthenticated link and a pre-authenticated notification link for one order without a customer login. This plan does not call `order(id:)` and does not use pre-authenticated order status. |
 | R5 | Customer Account API `Order` can drive the existing status, delivered, and address mappers. | Does not hold. `financialStatus` uses `OrderFinancialStatus` (`PENDING`, `AUTHORIZED`, `PAID`, `PARTIALLY_PAID`, `PARTIALLY_REFUNDED`, `REFUNDED`, `EXPIRED`, `VOIDED`) on a field named `financialStatus`, not Admin `displayFinancialStatus`. `fulfillmentStatus` uses `OrderFulfillmentStatus`, which has no `REQUEST_DECLINED` and no `FULFILLMENT_NOT_REQUIRED`. Totals are `MoneyV2` (`subtotal`, `totalPrice`, `totalTax`, `totalShipping`), not `MoneyBag.shopMoney` and not the `current*` fallback pairs. `fulfillments` is a connection. Customer Account API `Fulfillment` has `latestShipmentStatus`, `trackingInformation`, and `estimatedDeliveryAt`. It has no `deliveredAt`. Addresses are `CustomerAddress`: `countryCode` and `zoneCode`, not Admin `MailingAddress.countryCodeV2`. The delivered plan’s signal and the address plan’s country field are on the Admin objects. |
 | R6 | Admin `read_orders` returns only the buyer’s orders. | Does not hold. `read_orders` covers the shop’s orders in the default window of about 60 days. An order outside that window is null. `read_all_orders` stays off. The connector treats an Admin null, after a passed ownership check, as **404** `ORDER_NOT_FOUND`. |
-| R7 | Returning street addresses still depends on the Partner Dashboard Address declaration. | Holds. The body is the Admin order. Protected customer data is separate from Customer Account API scopes. Level 2 for this custom app stays always available. Address is declared because the final phase selects `shippingAddress` and `billingAddress`. Name and Phone are not declared. The OIDC scope `email` may appear on the authorize request. The connector checks `nonce` on the `id_token` and then discards the token. It does not select `Order.email`, it does not read an email claim into the JWT, and it does not declare the Partner Dashboard Email field for a response that does not return email. |
+| R7 | Address is the only protected-customer-data field this phase declares. | Does not hold. The Customer Account API authentication guide says the API requires protected customer data level 2, specifically first name, last name, and email, and it tells the app to request the Name and Email fields. Declaring Address alone does not meet that. This phase declares Name and Email from the login pull request, and Address from the address pull request. Phone stays undeclared. The HTTP body still omits name, email, and phone. The OIDC scope `email` may appear on the authorize request. The connector checks `nonce` on the `id_token` and then discards the token. It does not select `Order.email` and does not copy an email claim into the JWT. |
 
 ## 7. What changes in the connector
 
@@ -118,40 +118,73 @@ Pull request 5 deletes the flag and deletes the address gate. The flag-on behavi
 
 ### 7.1 Discovery and the app client
 
-`[customer_authentication]` on the app sets `redirect_uris` to the connector callback:
+The shop has to use new customer accounts. In Shopify admin that is Settings → Customer accounts → Customer accounts. Legacy customer accounts are not this client. A shop that still has them disabled, or still on the legacy accounts, has no Customer Account API discovery document for this flow.
 
-`${APP_URL}/api/fastbuyjson/auth/customer/callback`
+`[customer_authentication]` on the app sets:
 
-`APP_URL` is an HTTPS origin, the same requirement `SHOPIFY_PLAN.md` already puts on the merchant install callback. The Customer Account API redirect URI has to match that entry. A missing `APP_URL`, or an `APP_URL` that is not HTTPS, makes `POST /auth/customer/start` return **500** `INTERNAL_ERROR`. The client-credentials Admin token does not complete this browser step.
+| Key | Value |
+| --- | --- |
+| `redirect_uris` | `${APP_URL}/api/fastbuyjson/auth/customer/callback` |
+| `javascript_origins` | The origin of `APP_URL` (scheme, host, and port). No path. |
+
+`APP_URL` is an HTTPS origin, the same requirement `SHOPIFY_PLAN.md` already puts on the merchant install callback. Shopify does not accept `localhost` or an `http` redirect for this client. The Customer Account API redirect URI has to match `redirect_uris`. A missing `APP_URL`, or an `APP_URL` that is not HTTPS, makes `POST /auth/customer/start` return **500** `INTERNAL_ERROR`. The client-credentials Admin token does not complete this browser step.
+
+Discovery runs on start, before a poll row is written. The connector fetches `https://{shop}/.well-known/openid-configuration` and `https://{shop}/.well-known/customer-account-api`, using `SHOPIFY_SHOP`. A non-200 response, a body that is not JSON, or a JSON body missing `authorization_endpoint`, `token_endpoint`, or `graphql_api`, is a failed discovery. Start then returns **500** `INTERNAL_ERROR`. `detail` says customer accounts must be enabled and discovery failed. The body has no token, no poll secret, and no Shopify error payload. Catalog, cart, and checkout do not call discovery.
 
 `[access_scopes]` gains `customer_read_orders` and `customer_read_customers`. It keeps `read_orders` and the four `unauthenticated_*` scopes. It does not gain `read_customers`, `write_customers`, `customer_write_orders`, `customer_write_customers`, or `read_all_orders`.
 
 An install that already granted the earlier scopes does not gain the two customer scopes by itself. The merchant install goes through the authorization code grant again. Until that grant exists, a customer-mode order read returns the reinstall **500** in section 7.6. Catalog, cart, and checkout keep working.
 
-The authorize request uses the discovered `authorization_endpoint` and the scope string `openid email customer-account-api:full`. The connector pull request re-checks that string. The token request is `application/x-www-form-urlencoded` to the discovered `token_endpoint`, with `grant_type=authorization_code`, `client_id`, `redirect_uri`, `code`, and `code_verifier`. No `Authorization: Basic` header. The Customer Account API GraphQL call sends `Authorization` set to the customer access token itself. The 2026-10 authentication page shows that header as the token, not as `Bearer <token>`. The connector pull request re-checks the header before the client freezes.
+The authorize request uses the discovered `authorization_endpoint` and the scope string `openid email customer-account-api:full`. The connector pull request re-checks that string. The token request is `application/x-www-form-urlencoded` to the discovered `token_endpoint`, with `grant_type=authorization_code`, `client_id`, `redirect_uri`, `code`, and `code_verifier`. No `Authorization: Basic` header. The same request sends `User-Agent: fast-buy-json-shopify/<package version>` and `Origin` set to the `APP_URL` origin. The 2026-10 authentication page says a missing `User-Agent` comes back as **403**, and a **401** whose `WWW-Authenticate` says `invalid_token` is what a missing or unlisted `Origin` looks like. Those two responses fail the login with **500** `INTERNAL_ERROR` and a detail that customer login is misconfigured. They are not **401** `INVALID_TOKEN`. The Customer Account API GraphQL call sends the same `User-Agent` and `Origin`, and sends `Authorization` set to the customer access token itself. The 2026-10 authentication page shows that header as the token, not as `Bearer <token>`. The connector pull request re-checks the header before the client freezes.
 
-`code_verifier` is a high-entropy string of 43 to 128 unreserved characters from a CSPRNG. `code_challenge` is unpadded base64url of SHA-256 over the verifier’s ASCII bytes. `code_challenge_method` is `S256`. `state` and `nonce` are separate CSPRNG values stored on the poll row.
+`code_verifier` is a high-entropy string of 43 to 128 unreserved characters from a CSPRNG. `code_challenge` is unpadded base64url of SHA-256 over the verifier’s ASCII bytes. `code_challenge_method` is `S256`. `nonce` is a separate CSPRNG value stored on the poll row at start. `state` is created on the first login GET, as section 7.2 requires, and is stored as a hash.
 
 ### 7.2 Device-style handoff
 
 These routes are connector routes. They are not in `openapi/fastbuyjson.yaml`. `POST /auth/login` on the reference servers stays username and password. The connector does not implement that body.
 
+Two secrets stay apart. `loginId` is public and is the only identifier in `loginUrl`. `pollToken` is the bearer for the JWT. Each is at least **128 bits** from a CSPRNG, encoded as unpadded base64url. `pollToken` is never placed in a URL, a cookie, a `Referer`, or a log line. A leaked login link does not redeem the JWT.
+
+`userCode` is a short confirmation code, eight characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, displayed as `XXXX-XXXX`. The start response includes it, and the browser page shows the same value. It is not a bearer. Knowing it does not poll and does not mint a JWT.
+
 | Step | Call | Result |
 | --- | --- | --- |
-| 1 | `POST /auth/customer/start` | Creates a poll row. Returns `loginUrl`, `pollToken`, and `expiresAt`. `loginUrl` is the connector URL in the next row. |
-| 2 | Browser `GET /auth/customer/login/{pollToken}` | **302** to the discovered authorization endpoint with `client_id`, `response_type=code`, `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, and `code_challenge_method=S256`. |
-| 3 | Shopify redirects to the callback | The connector checks `state`, exchanges the code, checks `nonce` inside `id_token`, reads `customer { id }`, computes `sub`, stores the customer access token, and signs the JWT. |
-| 4 | `GET /auth/customer/poll/{pollToken}` | Pending: **200** `{ "status": "pending" }`. Complete, first read: **200** `{ "status": "complete", "access_token", "token_type": "bearer", "expires_in" }`. The access token is the FastBuyJSON JWT. There is no `refresh_token`. |
+| 1 | `POST /auth/customer/start` | Creates a poll row after the limits below. Returns `loginUrl`, `pollToken`, `userCode`, and `expiresAt`. `loginUrl` is `${APP_URL}/api/fastbuyjson/auth/customer/login/{loginId}`. |
+| 2 | Browser `GET /auth/customer/login/{loginId}` | First request only. Consumes the link, sets the cookie below, and returns **200** HTML. The page shows `userCode` and the sentence “Sign in to read your orders from this shop, including status, items, totals, tracking, and shipping and billing addresses.” It tells the buyer to continue only when the code matches the one their agent showed. It does not redirect. |
+| 3 | Browser `POST /auth/customer/login/{loginId}/continue` | Requires the cookie from step 2. **302** to the discovered authorization endpoint with `client_id`, `response_type=code`, `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, and `code_challenge_method=S256`. |
+| 4 | Shopify redirects to the callback | Requires the same cookie. Invalidates `state`, then exchanges the code. Checks `nonce` inside `id_token`, reads `customer { id }`, computes `sub`, stores the customer access token, and signs the JWT. |
+| 5 | `POST /auth/customer/poll` | Body `{ "pollToken": "…" }`. Pending: **200** `{ "status": "pending" }`. Complete, first read: **200** `{ "status": "complete", "access_token", "token_type": "bearer", "expires_in" }`. The access token is the FastBuyJSON JWT. There is no `refresh_token`. |
 
-The poll row lives **10 minutes**. `expiresAt` on the start response is that deadline. The connector does not hold the poll request open. An unknown poll token, an expired poll, a `state` mismatch, a `nonce` mismatch, a token response that fails, or a `Customer.id` that fails section 4, stores no session. The poll then answers **401** `INVALID_TOKEN`. A second poll after a successful handoff answers **401** `INVALID_TOKEN`. The JWT was returned once.
+A `pollToken` in the query string or the path is **401** `INVALID_TOKEN`. The handler does not look up a row from that value.
 
-The start response and the poll response send `Cache-Control: no-store`. The login redirect and the callback do too. The callback’s HTML page does not contain the JWT, the customer access token, or the GID. The buyer can close it. The agent already has the poll.
+The poll row lives **10 minutes**. `expiresAt` on the start response is that deadline. The connector does not hold the poll request open. An unknown poll token, an expired poll, a `state` mismatch, a `nonce` mismatch, a buyer-caused token failure, or a `Customer.id` that fails section 4, stores no session. The poll then answers **401** `INVALID_TOKEN`. A second poll after a successful handoff answers **401** `INVALID_TOKEN`. The JWT was returned once, and the poll row is deleted on that response.
 
-The connector discards `id_token` after the nonce check. It discards `refresh_token` if one appears. It does not call `grant_type=refresh_token`. It does not send `prompt=none`. It does not call `end_session_endpoint`. When the stored customer access token is past `expires_in`, the session row is unusable and the buyer starts at step 1 again.
+**One-time link and browser binding.** The first GET of `loginUrl` marks the link consumed and sets:
 
-SQLite, encrypted with `TOKEN_ENCRYPTION_KEY`, gains two kinds of row. The poll row holds the poll-token hash, `state`, `nonce`, `code_verifier`, and expiry. The session row holds `sub`, the customer access token, and that token’s expiry. It does not hold the GID, the email, the `id_token`, or a refresh token. The poll token and `state` are stored as SHA-256 hashes. The raw poll token is returned once, at start.
+`Set-Cookie: __Host-fastbuyjson-login=<128-bit base64url>; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=600`
 
-`customers/redact` recomputes `sub` from the webhook’s customer id and deletes that session row. `customers/data_request` deletes the same way and exports nothing. `shop/redact` deletes every session row with the shop row. The v1 compliance topics stay as they are. This phase adds no subscription.
+No `Domain` attribute. The cookie value is a fresh CSPRNG secret, stored as a SHA-256 hash on the poll row. A second GET, an unknown `loginId`, and an expired link return the same **400** HTML page, set no cookie, and do not redirect. `POST …/continue` without that cookie returns **400** HTML and does not redirect. The callback requires the cookie hash to match the row. This is the device-flow binding from RFC 8628 section 5.4: the attacker who only holds `loginUrl` does not hold the cookie, and the buyer who opens someone else’s link sees a user code that does not match their own agent.
+
+**One-time `state`.** `state` is 128 bits from a CSPRNG, created on the first GET, and stored as a SHA-256 hash. The callback marks that hash used and commits the mark **before** the token request. A second callback with the same `state` does not exchange a code. A crash after the mark and before a stored session means the buyer starts again.
+
+The start response, the poll response, the login HTML, the redirect, and the callback send `Cache-Control: no-store`. The login HTML and the callback also send `Referrer-Policy: no-referrer`. The callback’s HTML page does not contain the JWT, the customer access token, the poll token, or the GID. The buyer can close it. The agent already has the poll.
+
+The connector discards `id_token` after the nonce check. It discards `refresh_token` if one appears. It does not call `grant_type=refresh_token`. It does not send `prompt=none`. It does not call `end_session_endpoint`. Logout on that endpoint requires `id_token_hint`, and the hint is not kept. There is no connector route that revokes a JWT. A stolen JWT stays valid until its `exp` (at most 3600 seconds) and only while the session row’s customer access token is unexpired. When that token is past `expires_in`, the session row is unusable and the buyer starts at step 1 again.
+
+**Limits on start and poll.** `POST /auth/customer/start` is anonymous and writes a row, so it is limited whether or not customer mode is on.
+
+| Limit | Rule |
+| --- | --- |
+| Per address | **10** start attempts per TCP peer address per **10 minutes**, including attempts that fail discovery. The peer address is the socket address. `X-Forwarded-For` is not read. Over the limit: **429** `RATE_LIMITED`, and no row is written. |
+| Live rows | At most **100** poll rows that have not expired. Over the cap: **429** `RATE_LIMITED`, and no row is written. |
+| Poll interval | At most one poll per poll row per **2 seconds**. A faster poll is **429** `RATE_LIMITED`. The row stays pending. The JWT is not returned. |
+| Cleanup | On start, poll, callback, and a customer-mode order read, delete poll rows past `expiresAt` and session rows whose customer access token is past its expiry. No background timer. The same pass deletes a poll row after its one successful JWT handoff. |
+
+SQLite, encrypted with `TOKEN_ENCRYPTION_KEY`, gains two kinds of row. The poll row holds the hashes of `loginId`, `pollToken`, `state`, and the cookie value, plus `userCode`, `nonce`, `code_verifier`, expiry, and the last poll time. The session row holds `sub`, the customer access token, and that token’s expiry. It does not hold the GID, the email, the `id_token`, or a refresh token. `loginId`, `pollToken`, `state`, and the cookie value are stored as SHA-256 hashes. The raw `pollToken` is returned once, in the start JSON body.
+
+**One session row per customer.** The session row is keyed by `sub`. A second login for the same GID overwrites that row’s customer access token and expiry. It does not add a second row and it does not set `jti`. JWTs already issued for that `sub` keep verifying until their own `exp`. Ownership checks use the replaced customer access token. A second login does not cut those JWTs short of `exp`, except when the replaced token expires first, which returns **401** `INVALID_TOKEN`.
+
+`customers/redact` recomputes `sub` from the webhook’s customer id and deletes that session row. `customers/data_request` deletes the same way and exports nothing. That delete is intentional: the topic asks for an export, and this connector has no order archive and no stored email to export. The session row is a customer credential, so the handler removes it and acknowledges the webhook. `shop/redact` deletes every session row with the shop row. The v1 compliance topics stay as they are. This phase adds no subscription. After a `SHOPIFY_CUSTOMER_SUB_SECRET` rotation, redact cannot see rows written under the old secret. Section 4 leaves those rows to the lazy purge.
 
 ### 7.3 Order auth
 
@@ -227,9 +260,9 @@ Status follows `SHOPIFY_ORDERS_PLAN.md` section 4.3, then `SHOPIFY_DELIVERED_PLA
 | Address-field redaction, once addresses are selected | The email plan’s section 3.4 redaction row, without the `email` path. A redacted address object is omitted. The status stays **200**. |
 | The mapped body fails `schemas/order-status.json` | **500** `INTERNAL_ERROR`. The invalid body is not sent. |
 
-Every response from the order route, the start route, the poll route, the login redirect, and the callback sends `Cache-Control: no-store`. `/detect` stays `Cache-Control: public, max-age=300`.
+Every response from the order route, the start route, the poll route, the login page, the continue redirect, and the callback sends `Cache-Control: no-store`. `/detect` stays `Cache-Control: public, max-age=300`.
 
-Logs may include the HTTP status, whether customer mode is on, and the client order token when that token is not a GID. A GID lookup is logged as a gid lookup without the GID. Logs omit the query string, authorization codes, `code_verifier`, `state`, `nonce`, poll tokens, JWTs, customer access tokens, Admin tokens, the HMAC secret, email, phone, names, addresses, card data, and every `gid://` string.
+Logs may include the HTTP status, whether customer mode is on, and the client order token when that token is not a GID. A GID lookup is logged as a gid lookup without the GID. Logs omit the query string, authorization codes, `code_verifier`, `state`, `nonce`, `loginId`, `pollToken`, `userCode`, the login cookie, JWTs, customer access tokens, Admin tokens, the HMAC secret, email, phone, names, addresses, card data, and every `gid://` string.
 
 ### 7.7 Discovery document
 
@@ -243,13 +276,13 @@ Pull request 5 leaves that detect shape in place with no flag.
 
 | Field | Declare | Why |
 | --- | --- | --- |
-| Protected customer data | Yes | The Admin order read is customer data. |
+| Protected customer data | Yes | Level 2. The Customer Account API authentication guide requires it for this login, and the Admin order read is customer data. |
+| Name | Yes, from pull request 2 | Level 2 for Customer Account API auth covers first name and last name. Not selected on the Admin order. Not returned. |
+| Email | Yes, from pull request 2 | The same level 2 requirement. Not selected. Not returned. The OIDC `email` scope is not a substitute for this declaration. |
 | Address | Yes, from pull request 4 | Street lines on shipping and billing. |
-| Email | No | Not selected on the Admin order. Not returned. The OIDC `email` scope is not this declaration. |
-| Name | No | Not selected. Not returned. |
-| Phone | No | Not selected. Not returned. |
+| Phone | No | Not selected. Not returned. Not required for this login. |
 
-Distribution stays custom. This phase does not submit the app for App Store review.
+Declaring Name and Email does not add them to the selection set in section 7.5 and does not put them in the HTTP body. Distribution stays custom. This phase does not submit the app for App Store review.
 
 ### 7.9 Fixtures
 
@@ -259,7 +292,7 @@ The connector pull requests add checked-in fixtures. CI does not call Shopify. O
 | --- | --- |
 | Flag off. Anonymous `GET /orders/1001` | The order-status body. Bearer ignored. Addresses follow the address-gate plan, not this one. |
 | Flag off. `POST /auth/customer/start` | Not advertised on `/detect`. |
-| Start, then login redirect | **302** to the discovered authorization endpoint. The query carries `code_challenge_method=S256` and does not carry `client_secret` or `prompt`. |
+| Continue POST with the login cookie | **302** to the discovered authorization endpoint. The query carries `code_challenge_method=S256` and does not carry `client_secret` or `prompt`. The token request sends `User-Agent` and `Origin`. |
 | Token response with `access_token`, `expires_in`, `id_token`, and no `refresh_token` | Session row has the access token and `sub`. It has no refresh token, no GID, and no email. |
 | Token response that includes `refresh_token` | The refresh token is absent from SQLite. `grant_type=refresh_token` is not called. |
 | `id_token` nonce mismatch | No session row. Poll returns **401** `INVALID_TOKEN`. |
@@ -279,6 +312,28 @@ The connector pull requests add checked-in fixtures. CI does not call Shopify. O
 | Token without `customer_read_orders` | **500** `INTERNAL_ERROR`, reinstall detail, no token in the body. |
 | Flag on. Detect | `endpoints` includes `auth` and `orders`. `authentication.methods` includes `anonymous` and `jwt`. `confirmCreatesOrder` is false. |
 | Cart `POST /cart/add` with a Bearer JWT, flag on | The anonymous cart. The JWT does not select a second cart. |
+| `loginUrl` | The path contains `loginId` only. It does not contain `pollToken`. |
+| `pollToken` in the query string or the path | **401** `INVALID_TOKEN`. No row lookup from that value. No JWT. |
+| `POST /auth/customer/poll` with the body `pollToken`, login still pending | **200** `{ "status": "pending" }`. |
+| First GET of `loginUrl` | **200** HTML. The body shows `userCode` and the grant sentence from section 7.2. It is not a **302**. `Set-Cookie` is `__Host-fastbuyjson-login`, `HttpOnly`, `Secure`, `Path=/`, `SameSite=Lax`, and has no `Domain`. |
+| Second GET of the same `loginUrl`, or an unknown `loginId` | **400** HTML. No new cookie. No redirect. The two cases use the same page. |
+| Continue POST without the cookie | **400** HTML. No redirect. The token endpoint is not called. |
+| Callback with a matching cookie, then the same `state` again | The first callback marks `state` used before the token request. The second callback does not exchange a code. |
+| Callback without the cookie | No token request. No session row. |
+| Expired poll, and an unknown `pollToken` in the POST body | **401** `INVALID_TOKEN`. |
+| Eleventh start from the same TCP peer inside 10 minutes | **429** `RATE_LIMITED`. No row. |
+| 100 live poll rows, one more start | **429** `RATE_LIMITED`. No row. |
+| Two polls for one row inside 2 seconds | The second is **429** `RATE_LIMITED`. The JWT is not returned. |
+| `customer { id }` HMAC does not match the session `sub` | **401** `INVALID_TOKEN`. That session row is deleted. |
+| `SHOPIFY_CUSTOMER_SUB_SECRET` or `JWT_SECRET` unset at login completion | **500** `INTERNAL_ERROR`. No JWT. |
+| `SHOPIFY_CUSTOMER_SUB_SECRET` set and shorter than 32 bytes | The process refuses to start. |
+| Discovery document missing or not JSON | Start returns **500** `INTERNAL_ERROR`. Detail says customer accounts must be enabled. No poll row. |
+| Token endpoint **403**, or **401** `invalid_token` on `WWW-Authenticate` | Poll returns **500** `INTERNAL_ERROR`. Detail says customer login is misconfigured. |
+| Second login for the same `Customer.id` | One session row. The customer access token is the new one. The first JWT still verifies until its own `exp`. |
+| `customers/redact` for that customer | The session row is deleted. |
+| `customers/data_request` for that customer | The session row is deleted. The handler exports nothing. |
+| Callback HTML | The body contains no JWT, no poll token, and no `gid://`. |
+| Log lines for start, poll, login, and callback | No `pollToken`, no authorization code, no `userCode`, and no JWT. |
 
 ## 8. Constraints
 
@@ -291,7 +346,11 @@ The connector pull requests add checked-in fixtures. CI does not call Shopify. O
 - Filter Admin `orders` by `customer_id:` and skip the Customer Account API ownership query.
 - Put the customer GID, the email, or the Shopify access token in the JWT, the order body, `extensions`, or logs.
 - Store the GID, the email, the `id_token`, or a refresh token in SQLite.
-- Call `grant_type=refresh_token` or send `prompt=none`.
+- Put `pollToken` in a URL, a cookie, a `Referer`, or a log line, or redeem a JWT from `loginId` alone.
+- Exchange an authorization code before `state` is marked used, or exchange the same `state` twice.
+- Skip the Name or Email protected-customer-data declaration. Address alone does not satisfy level 2 for this login.
+- Call `grant_type=refresh_token`, send `prompt=none`, or call `end_session_endpoint`.
+- Revoke a JWT before `exp`. `id_token` is not kept, so there is no `id_token_hint`.
 - Implement `POST /auth/login` username and password, or `POST /auth/refresh`, on the connector.
 - Use a headless or Hydrogen customer client, Multipass, or Storefront `customerAccessTokenCreate`.
 - Add `read_customers`, `read_all_orders`, `write_orders`, or a customer write scope.
@@ -307,9 +366,9 @@ The connector pull requests add checked-in fixtures. CI does not call Shopify. O
 | PR | Where | Ships |
 | --- | --- | --- |
 | 1. This plan | This repository | `docs/SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md`, the pointers in `SHOPIFY_PLAN.md` section 9, `SHOPIFY_ORDERS_PLAN.md`, and `SHOPIFY_EMAIL_ORDER_PLAN.md`, and the `docs/CONTRACT.md` note. No schema, OpenAPI, SDK, MCP, reference-server, or connector change. |
-| 2. Login | `millers-dev/fast-buy-json-shopify` | `[customer_authentication]` callback, the two customer scopes, discovery, PKCE, start / login redirect / callback / poll, the HMAC `sub`, the encrypted rows, and the compliance deletes. `SHOPIFY_CUSTOMER_ACCOUNTS` default off. Orders and `/detect` unchanged while it is off. |
+| 2. Login | `millers-dev/fast-buy-json-shopify` | `[customer_authentication]` callback and `javascript_origins`, the two customer scopes, Name and Email declared, discovery, PKCE, the split `loginId` / `pollToken`, the user-code page, the `__Host-` cookie, one-time `state`, start limits, HMAC `sub`, encrypted rows, and the compliance deletes. `SHOPIFY_CUSTOMER_ACCOUNTS` default off. Orders and `/detect` unchanged while it is off. |
 | 3. Ownership | Connector | When the flag is on, section 7.3 and section 7.4. The Admin body uses the existing status, delivered, money, items, payment, and shipment mappers. Addresses stay omitted. `?email=` is ignored while the flag is on. |
-| 4. Addresses | Connector | When the flag is on, add section 7.5’s address selection and the email plan’s address map. Declare Address. Card fragments stay omitted. |
+| 4. Addresses | Connector | When the flag is on, add section 7.5’s address selection and the email plan’s address map. Declare Address. Name and Email are already declared in pull request 2. Card fragments stay omitted. |
 | 5. Default | Connector | Remove `SHOPIFY_CUSTOMER_ACCOUNTS`. Customer mode is the only order behavior. Remove `SHOPIFY_ORDER_ADDRESS_GATE` and `?email=`. `/detect` advertises `jwt` without a flag. Anonymous `GET /orders/{orderId}` is **401** `AUTHENTICATION_REQUIRED`. |
 
 Each connector pull request merges on its own. Runtime stays Node.js 18+, TypeScript, global `fetch`, `node:test`, API `2026-10`. The connector vendors schemas. It does not edit them.
@@ -332,9 +391,13 @@ The Partner Dashboard declaration and the `[customer_authentication]` redirect a
 
 **No refresh token.** The app client cannot renew the customer access token in the background. A long agent session logs in again when `expires_in` elapses. `prompt=none` needs a browser session this poll does not keep. The JWT does not outlive the customer access token.
 
+**No revocation.** `id_token` is discarded after the nonce check, and Shopify’s logout endpoint requires `id_token_hint`. This plan adds no logout route. A stolen JWT remains usable until `exp`, which is at most one hour, and only while the session row’s customer access token has not expired. A second login overwrites that token and does not cancel the first JWT early.
+
+**Device-flow phishing.** An attacker can still send their own `loginUrl` and ask the buyer to sign in. The interstitial shows a user code and the access being granted. The code will not match the code on the buyer’s own agent. A buyer who continues anyway grants the attacker’s poll the JWT. The one-time link and the `__Host-` cookie stop the attacker from finishing the redirect on a link the buyer opened. They do not stop a buyer who ignores the code.
+
 **`grant_types_supported` lists `refresh_token`.** That list describes the server. Calling the grant on this client returns **400** `unsupported_grant_type`. The connector does not try it.
 
-**The poll token is a bearer for the JWT.** It is single-use and lives 10 minutes. A proxy that logs the start response captures it. Connector logs omit it. The callback page does not echo the JWT.
+**The poll token is a bearer for the JWT. The login link is not.** `pollToken` lives in the start JSON body, is single-use, and lasts 10 minutes. A proxy that logs the start response captures it. Connector logs omit it. `loginUrl` carries `loginId` only, so a browser history entry or a proxy log of that GET does not redeem the JWT. The callback page does not echo the JWT.
 
 **HTTPS callback.** Local client-credentials development has no browser redirect until `APP_URL` is an HTTPS tunnel registered as a `redirect_uri`. Catalog and cart do not gain that requirement.
 
@@ -344,9 +407,9 @@ The Partner Dashboard declaration and the `[customer_authentication]` redirect a
 
 **Reference MCP.** `mcp-server/src/adapter.ts` `getOrderStatus` sends no Authorization header. After PR 5 the tool fails with `AUTHENTICATION_REQUIRED`. Cart and checkout tools keep working. This plan does not change the MCP server.
 
-**Secret rotation.** Changing `SHOPIFY_CUSTOMER_SUB_SECRET` splits identity for the same Shopify customer across the rotation. Carts are unaffected because they stay anonymous. Order history has no local archive keyed by `sub`.
+**Secret rotation.** Changing `SHOPIFY_CUSTOMER_SUB_SECRET` splits identity for the same Shopify customer across the rotation. Carts are unaffected because they stay anonymous. Order history has no local archive keyed by `sub`. `customers/redact` cannot find a row written under the previous secret. That row remains until the customer access token expires and section 7.2’s lazy purge deletes it.
 
-**API calendar.** `SHOPIFY_PLAN.md` records that 2026-10 falls out of support on 2026-10-16. This plan does not bump the pin. A later pull request bumps Admin and the Customer Account API together, and re-checks R1 through R5 on that pin.
+**API calendar.** The pin stays **2026-10**. Shopify’s versioning table, read 2026-10-06, lists that version as released on 2026-10-01 and accessible until **2027-10-16 15:00 UTC**. The 2026-10-16 date is the end of access for **2025-10**, which is the date [`SHOPIFY_PLAN.md`](SHOPIFY_PLAN.md) recorded for this pin on 2026-10-03. This plan does not bump the pin and does not schedule a bump before pull request 2. A later pull request may bump Admin and the Customer Account API together while 2026-10 is still accessible, and it re-checks R1 through R5 on the new pin.
 
 ## 11. Defaults this plan accepts
 
@@ -358,14 +421,18 @@ No open product question blocks pull request 2. Merging this plan accepts the fo
 | C2 | The Shopify client is the app’s `[customer_authentication]` PKCE client. No refresh token is stored or sent. `prompt=none` is not used. An expired customer access token requires a new login. |
 | C3 | End state: anonymous `GET /orders/{orderId}` is **401** `AUTHENTICATION_REQUIRED`. There is no anonymous status-only response. `WWW-Authenticate: Bearer` is sent on that **401** and on **401** `INVALID_TOKEN`. |
 | C4 | An order that is not the caller’s, an unknown id, an ambiguous match, and an order outside the `read_orders` window are **404** `ORDER_NOT_FOUND` with one problem body. |
-| C5 | JWT `sub` is unpadded base64url of HMAC-SHA256 over the customer GID, keyed with `SHOPIFY_CUSTOMER_SUB_SECRET`. The GID is not a claim, not a response field, and not a log field. |
-| C6 | The agent handoff is `POST /auth/customer/start`, a browser `loginUrl`, and `GET /auth/customer/poll/{pollToken}`. The poll returns the JWT once and returns no refresh token. The poll row lives 10 minutes. |
+| C5 | JWT `sub` is unpadded base64url of HMAC-SHA256 over the customer GID, keyed with `SHOPIFY_CUSTOMER_SUB_SECRET`. That secret is at least 32 bytes or the process refuses to start. The GID is not a claim, not a response field, and not a log field. |
+| C6 | The agent handoff is `POST /auth/customer/start`, a browser `loginUrl` that contains `loginId` only, and `POST /auth/customer/poll` with `pollToken` in the JSON body. `loginId` and `pollToken` are each at least 128 bits. The poll returns the JWT once and returns no refresh token. The poll row lives 10 minutes. |
 | C7 | Pull request 5 removes `SHOPIFY_ORDER_ADDRESS_GATE` and `?email=`. Addresses are mapped for the authenticated owner with the email plan’s section 3.3. Until that pull request, `SHOPIFY_CUSTOMER_ACCOUNTS` defaults to off and the earlier order plans stay in force. |
 | C8 | Cart and checkout stay anonymous and out of scope. Bearer on those routes stays ignored. |
 | C9 | Ownership is `customer.orders` with `first: 2`. `order(id:)` on the Customer Account API is not called. Admin `order(id:)` runs only with the one owned GID. |
 | C10 | Scopes added are `customer_read_orders` and `customer_read_customers`. Admin `read_orders` stays. `read_customers`, `read_all_orders`, and customer write scopes stay off. |
 | C11 | No schema, OpenAPI, SDK, MCP, or reference-server change. No pin change. No new webhook topic. |
-| C12 | `customers/redact` and `customers/data_request` delete the session row for the recomputed `sub` and export nothing. |
+| C12 | `customers/redact` deletes the session row for the recomputed `sub`. `customers/data_request` deletes that row on purpose and exports nothing, because the connector keeps no order archive. After a secret rotation, redact does not find rows written under the old secret. Those rows wait for the lazy purge. |
+| C13 | The login GET shows the user code and the grant sentence before any redirect. The first GET consumes the link and sets `__Host-fastbuyjson-login` (`HttpOnly`, `Secure`, `Path=/`, `SameSite=Lax`, no `Domain`). The callback requires that cookie. `state` is marked used before the code exchange. |
+| C14 | Start is limited to 10 attempts per TCP peer per 10 minutes and 100 live poll rows. Poll is at most one request per row per 2 seconds. Expired poll and session rows are deleted on the next start, poll, callback, or customer-mode order read. |
+| C15 | Name and Email are declared for protected customer data level 2 from the login pull request. Address is declared when addresses are returned. Phone is not declared. The body still omits name, email, and phone. |
+| C16 | One session row per `sub`. A second login overwrites the customer access token. Outstanding JWTs for that `sub` stay valid until their own `exp`. There is no logout route and no `id_token_hint`. |
 
 ## 12. Sources
 
@@ -396,5 +463,9 @@ Shopify, read 2026-10-06. The connector still pins API `2026-10`.
 - Order status page authentication states (unauthenticated, pre-authenticated, fully authenticated): <https://shopify.dev/docs/apps/build/customer-accounts/order-status-page>
 - Access scopes, including `customer_read_orders`, `customer_read_customers`, and the `read_orders` window: <https://shopify.dev/docs/api/usage/access-scopes>
 - Protected customer data: <https://shopify.dev/docs/apps/launch/protected-customer-data>
+- Customer Account API authentication, including level 2 Name and Email: <https://shopify.dev/docs/storefronts/headless/building-with-the-customer-account-api/authenticate-customers>
+- Enable customer accounts (Settings → Customer accounts): <https://shopify.dev/docs/storefronts/headless/building-with-the-customer-account-api/getting-started>
+- Customer accounts, including the move off legacy accounts: <https://shopify.dev/docs/apps/build/customer-accounts>
+- RFC 8628 section 5.4, device-flow user code and phishing: <https://www.rfc-editor.org/rfc/rfc8628#section-5.4>
 - Admin `Order` used by the existing mappers: <https://shopify.dev/docs/api/admin-graphql/2026-10/objects/Order>
 - API versioning (2026-10): <https://shopify.dev/docs/api/usage/versioning>
