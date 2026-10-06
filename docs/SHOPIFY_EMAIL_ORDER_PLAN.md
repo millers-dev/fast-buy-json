@@ -4,6 +4,8 @@ Status: proposed. English only. This file is the implementation plan for returni
 
 Checked against this repository at **1.0.0** (`docs/CONTRACT.md`, `schemas/order-status.json`, OpenAPI `getOrderStatus`) and against Shopify’s public docs on **2026-10-06**. Sources are listed at the end. The order route, the lookup, and the status map stay in [`SHOPIFY_ORDERS_PLAN.md`](SHOPIFY_ORDERS_PLAN.md). Mapping `delivered` stays in [`SHOPIFY_DELIVERED_PLAN.md`](SHOPIFY_DELIVERED_PLAN.md). This plan starts after the order-status plan. It does not reopen either plan. The v1 sequence stays in [`SHOPIFY_PLAN.md`](SHOPIFY_PLAN.md).
 
+Once customer mode in [`SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md`](SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md) is the default, this gate is superseded. That plan’s final pull request removes `SHOPIFY_ORDER_ADDRESS_GATE` and `?email=`, and returns addresses only to the authenticated owner. Until that pull request, this file is still the plan for the flag.
+
 The defaults in section 1 were accepted on **2026-10-06** by Tomasz and Shopify engineering. After review of this plan, Tomasz chose mitigation (a): the address gate stays off unless `SHOPIFY_ORDER_ADDRESS_GATE` is set. Section 7 lists the defaults again so a review comment can overturn one without reopening the rest.
 
 ## 1. Decision
@@ -208,7 +210,7 @@ The order-status fixture “payload includes a shipping address and a billing ad
 - Fold Gmail dots, plus-tags, or IDNA forms into one address.
 - Add `read_all_orders`, `read_customers`, `write_orders`, or any scope beyond the order-status list.
 - Subscribe to order or customer webhooks. The v1 compliance webhooks stay as they are.
-- Call Customer Account API, or log a buyer into Shopify Customer Accounts.
+- Call Customer Account API, or log a buyer into Shopify Customer Accounts. Buyer login, and removal of this gate once that login is the default, is [`SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md`](SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md).
 - Call Checkout MCP or register a UCP agent.
 - Bump `SHOPIFY_API_VERSION` off `2026-10`.
 - Redesign rate limits. Shopify **429** still maps as in the order-status plan.
@@ -232,13 +234,13 @@ This repository needs no further code change for PR 2. `getOrderStatus` stays on
 
 ## 6. Risks
 
-**The gate is also an email check against a known order id.** The order-status plan already returns status, items, totals, and tracking to any caller who knows an accepted id. When the flag is on, this phase adds a visible difference: addresses appear only when the query matches `Order.email`. A caller can try addresses against `1001` and learn which one matches. Rate limits stay as they are. A shared secret on the order URL, or a login, is a later plan.
+**The gate is also an email check against a known order id.** The order-status plan already returns status, items, totals, and tracking to any caller who knows an accepted id. When the flag is on, this phase adds a visible difference: addresses appear only when the query matches `Order.email`. A caller can try addresses against `1001` and learn which one matches. Rate limits stay as they are. A login that replaces this check is [`SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md`](SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md).
 
 **A known email can be walked across order names.** This is the other direction, and it is the larger exposure. The caller already knows the person’s email and does not know the order name. Names inside the `read_orders` window run in sequence (`1001`, `1002`, and the rest). Each try is one anonymous GET with that `?email=`. The first **200** whose body includes `shippingAddress` or `billingAddress` returns that person’s home and billing address. A small shop’s window holds a few hundred orders, so the walk is a few hundred requests. Rate limits stay as in the order-status plan and do not slow the walk. The mitigation is `SHOPIFY_ORDER_ADDRESS_GATE` defaulting to off (section 1 and E11). With the flag off, a correct email still returns the address-free body, the same as today’s order route. The defaults in section 7 accept this case with that flag.
 
 **Proof of knowledge is not a buyer login.** The email is often on the receipt and in the shop’s own mail. Matching it does not bind the caller to JWT `sub`, does not set `userId`, and does not replace `docs/CONTRACT.md`. Anonymous callers remain allowed. Bearer remains ignored.
 
-**Guessable ids remain for everything except the two address objects.** `1001` and `1002` still return the address-free body inside the `read_orders` window. Customer Accounts stay out of this phase.
+**Guessable ids remain for everything except the two address objects.** `1001` and `1002` still return the address-free body inside the `read_orders` window. Buyer login that retires this gate is [`SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md`](SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md). It stays out of this phase.
 
 **Some orders have no email.** Point of sale and some checkouts leave `Order.email` null. The gate stays closed, including when a customer record would have had an email. This phase does not read `customer`.
 
@@ -256,7 +258,7 @@ This repository needs no further code change for PR 2. `getOrderStatus` stays on
 
 **Partial objects become 500 if they are emitted.** The omit-whole-object rule is what keeps a missing zip on **200**. A later edit that returns a partial address reintroduces that **500**.
 
-**API calendar.** `SHOPIFY_PLAN.md` records that 2026-10 falls out of support on 2026-10-16. This phase does not bump the pin. A later pull request bumps it while a version is still supported, and re-checks `Order.email` and the `MailingAddress` fields on that pin. If a field is gone, addresses stay omitted until a plan names the replacement. The connector does not invent one during the bump.
+**API calendar.** `SHOPIFY_PLAN.md` records that 2026-10 stays accessible until 2027-10-16 15:00 UTC. This phase does not bump the pin. A later pull request bumps it while a version is still supported, and re-checks `Order.email` and the `MailingAddress` fields on that pin. If a field is gone, addresses stay omitted until a plan names the replacement. The connector does not invent one during the bump.
 
 **A public listing is a different approval.** Level 2 is always available for this custom app. Listing the app later requires protected-customer-data review for Address and Email. This phase does not list the app.
 

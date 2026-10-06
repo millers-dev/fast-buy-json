@@ -31,7 +31,7 @@ Accepting this plan accepts those defaults. Section 11 lists them again so a rev
 | Plans: Basic $29/$39, Grow $79/$105, Advanced $299/$399, Plus from $2300/mo. Each advertises selling in AI chats. | Holds on <https://www.shopify.com/pricing> (prices as of 2026-10-01). Yearly / monthly: Basic $29 / $39, Grow $79 / $105, Advanced $299 / $399. Plus starts at $2,300 USD/mo. The Basic summary says “Sell online, in person, and in AI chats,” and the comparison table has a “Sell in AI chats” row for Basic, Grow, Advanced, and Plus. |
 | Agentic Storefronts is Shopify’s own channel. | Holds. Eligible stores are surfaced to AI channels from the Shopify admin. The $0 Agentic plan is a separate offer for brands that may not run a Shopify online store. This connector is a FastBuyJSON channel beside that, and it does not replace Shopify Checkout. |
 
-API pin for every later code PR: **2026-10**, stable on 2026-10-01, supported through 2026-10-16 15:00 UTC. Admin URL `https://{shop}.myshopify.com/admin/api/2026-10/graphql.json`. Storefront URL `https://{shop}.myshopify.com/api/2026-10/graphql.json`.
+API pin for every later code PR: **2026-10**, stable on 2026-10-01, accessible until 2027-10-16 15:00 UTC. Admin URL `https://{shop}.myshopify.com/admin/api/2026-10/graphql.json`. Storefront URL `https://{shop}.myshopify.com/api/2026-10/graphql.json`.
 
 ## 3. Package location
 
@@ -329,7 +329,7 @@ Runtime default: Node.js 18+, TypeScript, global `fetch`, `node:test`. Pin `2026
 | 6. Checkout handoff | Initiate writes buyer and address, returns `checkoutUrl`. Confirm checks the session, then refuses payment. | URL is HTTPS. Cart `key` is absent. Bad session and bad verification use the contract codes. A valid session is `PAYMENT_METHOD_UNSUPPORTED`. The fixture records no `complete_checkout` call and no payment payload. |
 | 7. Shipping options | Delivery groups after an address exists. | No address → `options: []`. Options without day bounds are omitted and counted. |
 
-Order status is not in this sequence. It needs `read_orders` or Order webhooks, protected customer data, and a status map onto `confirmed` / `processing` / `shipped` / `delivered` / `cancelled` / `refunded`. That is a new plan after v1 has been used on a real development store. The order-status plan is [`SHOPIFY_ORDERS_PLAN.md`](SHOPIFY_ORDERS_PLAN.md). Mapping `delivered` starts after the order-status plan. The delivered-status plan is [`SHOPIFY_DELIVERED_PLAN.md`](SHOPIFY_DELIVERED_PLAN.md). Returning shipping and billing addresses on that route after an email check is [`SHOPIFY_EMAIL_ORDER_PLAN.md`](SHOPIFY_EMAIL_ORDER_PLAN.md).
+Order status is not in this sequence. It needs `read_orders` or Order webhooks, protected customer data, and a status map onto `confirmed` / `processing` / `shipped` / `delivered` / `cancelled` / `refunded`. That is a new plan after v1 has been used on a real development store. The order-status plan is [`SHOPIFY_ORDERS_PLAN.md`](SHOPIFY_ORDERS_PLAN.md). Mapping `delivered` starts after the order-status plan. The delivered-status plan is [`SHOPIFY_DELIVERED_PLAN.md`](SHOPIFY_DELIVERED_PLAN.md). Returning shipping and billing addresses on that route after an email check is [`SHOPIFY_EMAIL_ORDER_PLAN.md`](SHOPIFY_EMAIL_ORDER_PLAN.md). Buyer login through Shopify Customer Accounts, and requiring that login on the order route, is [`SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md`](SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md). Cart and checkout stay anonymous.
 
 This repository needs no code change for that sequence. `docs/INTEGRATIONS.md` already says `FASTBUYJSON_API_URL` may be any compatible API.
 
@@ -349,7 +349,7 @@ This repository needs no code change for that sequence. `docs/INTEGRATIONS.md` a
 
 **Reference MCP error text.** Confirm’s problem body is included in the MCP tool error (`detail` and `checkoutUrl`). Initiate already returns `checkoutUrl` in the tool text. That is the handoff the agent uses.
 
-**API calendar.** 2026-10 falls out of support on 2026-10-16. A later pull request bumps the pin while the version is still supported. Requests that name a dead version are rewritten by Shopify to the oldest supported stable version, which is a quiet behavior change. The pin stays explicit.
+**API calendar.** 2026-10 stays accessible until 2027-10-16 15:00 UTC. A later pull request bumps the pin while the version is still accessible. Requests that name a dead version are rewritten by Shopify to the oldest supported stable version, which is a quiet behavior change. The pin stays explicit.
 
 ## 11. Defaults this plan accepts
 

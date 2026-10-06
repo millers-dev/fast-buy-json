@@ -60,6 +60,8 @@ Failed requests return `Content-Type: application/problem+json` with at least:
 
 Identity for carts, checkout, and orders is always the JWT `sub` claim. Header `X-User-Id` is **not** part of the contract and must not be used for authorization.
 
+A server may issue that JWT through an out-of-band login instead of `POST /auth/login`. The reference servers still issue tokens only from `POST /auth/login`. `AUTHENTICATION_REQUIRED` may be returned on `GET /orders/{orderId}` when that server requires a Bearer token and the request has none. The reference servers still allow anonymous access on commerce routes, including orders.
+
 **Certificate flow (experimental):** `POST /auth/certificate` returns `{ session_id, expires_in }` (24h). Reserved header `X-Certificate-Session` for future mTLS; no commerce endpoint consumes certificate sessions in 0.x.
 
 ## Idempotency
