@@ -2,7 +2,7 @@
 
 Status: proposed. English only. This file is the implementation plan for `GET /api/fastbuyjson/orders/{orderId}` on the Shopify connector. It is documentation. Accepting it does not change the HTTP contract, the JSON Schemas, the OpenAPI document, the reference servers, the TypeScript SDK, or the MCP server.
 
-Checked against this repository at **1.0.0** (`docs/CONTRACT.md`, `schemas/order-status.json`, OpenAPI `getOrderStatus`) and against Shopify’s public docs on **2026-10-05**. Sources are listed at the end. The connector’s v1 sequence is [`SHOPIFY_PLAN.md`](SHOPIFY_PLAN.md). This plan starts after that sequence. It does not reopen it.
+Checked against this repository at **1.0.0** (`docs/CONTRACT.md`, `schemas/order-status.json`, OpenAPI `getOrderStatus`) and against Shopify’s public docs on **2026-10-05**. Sources are listed at the end. The connector’s v1 sequence is [`SHOPIFY_PLAN.md`](SHOPIFY_PLAN.md). This plan starts after that sequence. It does not reopen it. Buyer login, and the end state in which an anonymous order read is **401** `AUTHENTICATION_REQUIRED`, is [`SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md`](SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md). Until that plan’s final pull request, this file’s anonymous order route stays in force.
 
 ## 1. Decision
 
@@ -193,7 +193,7 @@ Orders are protected customer data. This phase reads status, line items, totals,
 - List orders. The Admin `orders` connection is used only with `first: 2` to resolve one id.
 - Read orders older than the `read_orders` window. No `read_all_orders`.
 - Subscribe to order webhooks. Pull-only. The v1 compliance webhooks stay as they are. This phase adds no `orders/create` and no `orders/updated`.
-- Call Customer Account API, or log a buyer into Shopify Customer Accounts.
+- Call Customer Account API, or log a buyer into Shopify Customer Accounts. That work is [`SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md`](SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md), not this phase.
 - Call Checkout MCP `complete_checkout`, or register a UCP agent.
 - Return `order` or `orderId` from `POST /checkout/confirm`.
 - Bump `SHOPIFY_API_VERSION` off `2026-10`.
@@ -246,7 +246,7 @@ This repository needs no further code change for PR 2. The reference MCP server 
 
 ## 9. Risks
 
-**Guessable ids.** Anonymous access plus an order name of `1001` means a caller who can reach the process can try `1001`, `1002`, and the rest of the recent window. That is the access model section 4.6 accepts for this single-shop connector, and it is why `shippingAddress`, `billingAddress`, `lastFourDigits`, and `brand` stay out of the response. An email check that can add those address fields is [`SHOPIFY_EMAIL_ORDER_PLAN.md`](SHOPIFY_EMAIL_ORDER_PLAN.md), not this phase. Customer Accounts are a later plan. This phase does not add a shared secret on the order URL.
+**Guessable ids.** Anonymous access plus an order name of `1001` means a caller who can reach the process can try `1001`, `1002`, and the rest of the recent window. That is the access model section 4.6 accepts for this single-shop connector, and it is why `shippingAddress`, `billingAddress`, `lastFourDigits`, and `brand` stay out of the response. An email check that can add those address fields is [`SHOPIFY_EMAIL_ORDER_PLAN.md`](SHOPIFY_EMAIL_ORDER_PLAN.md), not this phase. Buyer login that replaces anonymous order reads is [`SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md`](SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md). This phase does not add a shared secret on the order URL.
 
 **60-day window.** `read_orders` hides older orders. They look like unknown orders. `read_all_orders` is a separate grant and stays out of this phase.
 
