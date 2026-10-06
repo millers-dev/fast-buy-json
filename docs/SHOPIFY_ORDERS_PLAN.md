@@ -14,7 +14,7 @@ Checked against this repository at **1.0.0** (`docs/CONTRACT.md`, `schemas/order
 | Scope added | `read_orders`. The default window is about 60 days. `read_all_orders` stays off. |
 | Order creation | Still none. `POST /checkout/confirm` does not create an order. `confirmCreatesOrder` stays `false`. |
 | Buyer auth | Anonymous, same as the rest of this connector. A Bearer token is ignored. |
-| Addresses and card fragments | Omitted. No `shippingAddress`, `billingAddress`, `lastFourDigits`, or `brand`. Those fields are not selected and not declared. |
+| Addresses and card fragments | Omitted. No `shippingAddress`, `billingAddress`, `lastFourDigits`, or `brand`. Those fields are not selected and not declared. The follow-on address gate is [`SHOPIFY_EMAIL_ORDER_PLAN.md`](SHOPIFY_EMAIL_ORDER_PLAN.md). |
 | `delivered` | Not produced in this phase. The follow-on map is [`SHOPIFY_DELIVERED_PLAN.md`](SHOPIFY_DELIVERED_PLAN.md). |
 
 Accepting this plan accepts those defaults. Section 10 lists them again so a review comment can overturn one without reopening the rest.
@@ -143,7 +143,7 @@ Line items are read until the connection is exhausted. The response lists every 
 
 `productId` is never a GID. Catalog ids in v1 are GIDs, so an order line does not round-trip to `POST /cart/add`. That drift is accepted: the order body stays free of `gid://`. A line with no sku and no variant legacy id is left out of `items`. The fixture records the omission. `items` may be an empty array when every line is in that state.
 
-**Addresses.** Omit `shippingAddress` and `billingAddress` on every response. The selection set does not read those objects. The schema allows the keys. The connector leaves them out. Anonymous access and guessable order names (`1001`, `1002`, and so on) are why. Returning an address after an email-plus-order-number check would be a later contract change, not this phase.
+**Addresses.** Omit `shippingAddress` and `billingAddress` on every response. The selection set does not read those objects. The schema allows the keys. The connector leaves them out. Anonymous access and guessable order names (`1001`, `1002`, and so on) are why. Returning an address after an email check on this route is [`SHOPIFY_EMAIL_ORDER_PLAN.md`](SHOPIFY_EMAIL_ORDER_PLAN.md), not this phase.
 
 **Payment.** Omit `payment` when `paymentGatewayNames` is empty or `displayFinancialStatus` is null. Otherwise `method` is the first gateway name, unchanged (`shopify_payments`, `Cash on Delivery (COD)`, and so on). `status` comes from the financial status:
 
@@ -185,7 +185,7 @@ Add `read_orders` to the comma-separated scope list from `SHOPIFY_PLAN.md` secti
 
 An install that already granted the v1 scopes does not gain `read_orders` by itself. The merchant install goes through the authorization code grant again. The same-organization client-credentials path needs the new scope on the app and a new token. Until that grant exists, the order route returns the **500** in section 4.5. Catalog, cart, and checkout keep working on the old token.
 
-Orders are protected customer data. This phase reads status, line items, totals, the gateway name, and tracking under `read_orders`. It does not declare Address, Email, Name, Phone, or card-fragment fields, because the query does not select them and the response does not return them. Level 2 is available for a custom app without App Store review. Using it to return an address still waits on a later contract change, such as an email-plus-order-number check. This phase keeps no order archive, so retention for order bodies is the lifetime of the HTTP response.
+Orders are protected customer data. This phase reads status, line items, totals, the gateway name, and tracking under `read_orders`. It does not declare Address, Email, Name, Phone, or card-fragment fields, because the query does not select them and the response does not return them. Level 2 is available for a custom app without App Store review. Using it to return an address waits on [`SHOPIFY_EMAIL_ORDER_PLAN.md`](SHOPIFY_EMAIL_ORDER_PLAN.md). This phase keeps no order archive, so retention for order bodies is the lifetime of the HTTP response.
 
 ## 6. What this phase cannot do
 
@@ -246,11 +246,11 @@ This repository needs no further code change for PR 2. The reference MCP server 
 
 ## 9. Risks
 
-**Guessable ids.** Anonymous access plus an order name of `1001` means a caller who can reach the process can try `1001`, `1002`, and the rest of the recent window. That is the access model section 4.6 accepts for this single-shop connector, and it is why `shippingAddress`, `billingAddress`, `lastFourDigits`, and `brand` stay out of the response. An email-plus-order-number check that could justify those fields is a later contract change, not this phase. Customer Accounts are a later plan. This phase does not add a shared secret on the order URL.
+**Guessable ids.** Anonymous access plus an order name of `1001` means a caller who can reach the process can try `1001`, `1002`, and the rest of the recent window. That is the access model section 4.6 accepts for this single-shop connector, and it is why `shippingAddress`, `billingAddress`, `lastFourDigits`, and `brand` stay out of the response. An email check that can add those address fields is [`SHOPIFY_EMAIL_ORDER_PLAN.md`](SHOPIFY_EMAIL_ORDER_PLAN.md), not this phase. Customer Accounts are a later plan. This phase does not add a shared secret on the order URL.
 
 **60-day window.** `read_orders` hides older orders. They look like unknown orders. `read_all_orders` is a separate grant and stays out of this phase.
 
-**Protected customer data.** This phase does not select or return addresses or card fragments, and it does not declare those fields. Order status, items, totals, and tracking are still order data. Logs follow section 4.6. A later phase that returns an address needs a contract change first (the email-plus-order-number check) and a Partner Dashboard field declaration with it.
+**Protected customer data.** This phase does not select or return addresses or card fragments, and it does not declare those fields. Order status, items, totals, and tracking are still order data. Logs follow section 4.6. A later phase that returns an address is [`SHOPIFY_EMAIL_ORDER_PLAN.md`](SHOPIFY_EMAIL_ORDER_PLAN.md), including the Partner Dashboard field declaration.
 
 **Fulfillment vocabulary.** Shopify’s display status `FULFILLED` becomes FastBuyJSON `shipped`. Agents that treat `shipped` as “handed to a carrier” and `delivered` as “received” will not see `delivered` here. The status page and `trackingUrl` are the delivery signal this phase can return.
 
