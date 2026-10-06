@@ -175,10 +175,16 @@ The connector discards `id_token` after the nonce check. It discards `refresh_to
 
 | Limit | Rule |
 | --- | --- |
-| Per address | **10** start attempts per TCP peer address per **10 minutes**, including attempts that fail discovery. The peer address is the socket address. `X-Forwarded-For` is not read. Over the limit: **429** `RATE_LIMITED`, and no row is written. |
+| Per address | **10** start attempts per client address per **10 minutes**, including attempts that fail discovery. Over the limit: **429** `RATE_LIMITED`, and no row is written. The client address is chosen as below. |
 | Live rows | At most **100** poll rows that have not expired. Over the cap: **429** `RATE_LIMITED`, and no row is written. |
 | Poll interval | At most one poll per poll row per **2 seconds**. A faster poll is **429** `RATE_LIMITED`. The row stays pending. The JWT is not returned. |
 | Cleanup | On start, poll, callback, and a customer-mode order read, delete poll rows past `expiresAt` and session rows whose customer access token is past its expiry. No background timer. The same pass deletes a poll row after its one successful JWT handoff. |
+
+**Client address for the start limit.** The default is the TCP socket address. `X-Forwarded-For` is not read. Once `APP_URL` is HTTPS the process usually sits behind a tunnel or reverse proxy, so every buyer shares that one socket address. The limit is then shop-wide: one client can use the ten attempts and block every other login for ten minutes.
+
+Optional `SHOPIFY_TRUSTED_PROXY_HOPS` splits those buckets. Unset, empty, or `0` keeps the socket address. A positive integer `N` takes the client address from `X-Forwarded-For`, counting from the right. The rightmost entry is hop 1, the address the nearest trusted proxy appended. `1` is the rightmost entry. `2` is the second from the right. A missing header, a list shorter than `N`, or an entry that is not an IP address is **429** `RATE_LIMITED` and writes no row. The connector does not fall back to the socket address while `N` is set. With `N` set, the process must be reachable only through those trusted proxies. A caller who can hit the process directly can put any address in the header and take a fresh bucket.
+
+This setting is only the start limiter. It does not change `Shopify-Storefront-Buyer-IP` in `SHOPIFY_PLAN.md` section 5.3, which still uses the TCP peer and still adds no FastBuyJSON header.
 
 SQLite, encrypted with `TOKEN_ENCRYPTION_KEY`, gains two kinds of row. The poll row holds the hashes of `loginId`, `pollToken`, `state`, and the cookie value, plus `userCode`, `nonce`, `code_verifier`, expiry, and the last poll time. The session row holds `sub`, the customer access token, and that token’s expiry. It does not hold the GID, the email, the `id_token`, or a refresh token. `loginId`, `pollToken`, `state`, and the cookie value are stored as SHA-256 hashes. The raw `pollToken` is returned once, in the start JSON body.
 
@@ -320,8 +326,12 @@ The connector pull requests add checked-in fixtures. CI does not call Shopify. O
 | Continue POST without the cookie | **400** HTML. No redirect. The token endpoint is not called. |
 | Callback with a matching cookie, then the same `state` again | The first callback marks `state` used before the token request. The second callback does not exchange a code. |
 | Callback without the cookie | No token request. No session row. |
+| Callback cookie present, hash matches a different poll row | No token request. No session row. This login’s poll stays pending until expiry. |
 | Expired poll, and an unknown `pollToken` in the POST body | **401** `INVALID_TOKEN`. |
-| Eleventh start from the same TCP peer inside 10 minutes | **429** `RATE_LIMITED`. No row. |
+| Eleventh start from the same TCP peer inside 10 minutes, hops unset | **429** `RATE_LIMITED`. No row. |
+| Two clients behind one proxy, hops unset | Both share the socket bucket. The eleventh start in ten minutes is **429**, whichever client sent it. |
+| `SHOPIFY_TRUSTED_PROXY_HOPS=1`, `X-Forwarded-For` ends with the client address | The bucket is that rightmost address. A different rightmost address has its own ten attempts. |
+| `SHOPIFY_TRUSTED_PROXY_HOPS=1`, header missing, shorter than one entry, or not an IP | **429** `RATE_LIMITED`. No row. The socket address is not used. |
 | 100 live poll rows, one more start | **429** `RATE_LIMITED`. No row. |
 | Two polls for one row inside 2 seconds | The second is **429** `RATE_LIMITED`. The JWT is not returned. |
 | `customer { id }` HMAC does not match the session `sub` | **401** `INVALID_TOKEN`. That session row is deleted. |
@@ -350,7 +360,7 @@ The connector pull requests add checked-in fixtures. CI does not call Shopify. O
 - Exchange an authorization code before `state` is marked used, or exchange the same `state` twice.
 - Skip the Name or Email protected-customer-data declaration. Address alone does not satisfy level 2 for this login.
 - Call `grant_type=refresh_token`, send `prompt=none`, or call `end_session_endpoint`.
-- Revoke a JWT before `exp`. `id_token` is not kept, so there is no `id_token_hint`.
+- Add a logout or revocation route. `id_token` is not kept, so there is no `id_token_hint`. Deleting a session row when `customer { id }` does not match `sub`, or when `customers/redact` or `customers/data_request` says to, is not that route.
 - Implement `POST /auth/login` username and password, or `POST /auth/refresh`, on the connector.
 - Use a headless or Hydrogen customer client, Multipass, or Storefront `customerAccessTokenCreate`.
 - Add `read_customers`, `read_all_orders`, `write_orders`, or a customer write scope.
@@ -401,6 +411,8 @@ The Partner Dashboard declaration and the `[customer_authentication]` redirect a
 
 **HTTPS callback.** Local client-credentials development has no browser redirect until `APP_URL` is an HTTPS tunnel registered as a `redirect_uri`. Catalog and cart do not gain that requirement.
 
+**Start limit behind a proxy.** With `SHOPIFY_TRUSTED_PROXY_HOPS` unset, the ten-attempt bucket is the socket address. Behind the HTTPS proxy that `APP_URL` implies, that bucket is the shop. One client can lock `POST /auth/customer/start` for everyone for ten minutes. Setting the hop count uses `X-Forwarded-For` and fails closed when the header is missing or short. A process that is also reachable without that proxy lets a caller forge the header.
+
 **OIDC `email`.** The documented authorize scope includes `email`. The `id_token` may therefore carry an email claim. The connector checks `nonce` and drops the token. A later edit that logs the `id_token` would log the buyer’s email.
 
 **Detect cannot say “orders are strict, cart is not”.** `authentication.methods` lists both `anonymous` and `jwt`. Clients that treat `anonymous` as “every commerce route is optional” will see **401** on orders. That is the end state, not a detect bug this plan papers over with a schema change.
@@ -409,7 +421,7 @@ The Partner Dashboard declaration and the `[customer_authentication]` redirect a
 
 **Secret rotation.** Changing `SHOPIFY_CUSTOMER_SUB_SECRET` splits identity for the same Shopify customer across the rotation. Carts are unaffected because they stay anonymous. Order history has no local archive keyed by `sub`. `customers/redact` cannot find a row written under the previous secret. That row remains until the customer access token expires and section 7.2’s lazy purge deletes it.
 
-**API calendar.** The pin stays **2026-10**. Shopify’s versioning table, read 2026-10-06, lists that version as released on 2026-10-01 and accessible until **2027-10-16 15:00 UTC**. The 2026-10-16 date is the end of access for **2025-10**, which is the date [`SHOPIFY_PLAN.md`](SHOPIFY_PLAN.md) recorded for this pin on 2026-10-03. This plan does not bump the pin and does not schedule a bump before pull request 2. A later pull request may bump Admin and the Customer Account API together while 2026-10 is still accessible, and it re-checks R1 through R5 on the new pin.
+**API calendar.** The pin stays **2026-10**. Shopify’s versioning table, read 2026-10-06, lists that version as released on 2026-10-01 and accessible until **2027-10-16 15:00 UTC**. The 2026-10-16 date is the end of access for **2025-10**, not for this pin. [`SHOPIFY_PLAN.md`](SHOPIFY_PLAN.md) and the later Shopify plans record the same accessible-until date. This plan does not bump the pin and does not schedule a bump before pull request 2. A later pull request may bump Admin and the Customer Account API together while 2026-10 is still accessible, and it re-checks R1 through R5 on the new pin.
 
 ## 11. Defaults this plan accepts
 
@@ -430,7 +442,7 @@ No open product question blocks pull request 2. Merging this plan accepts the fo
 | C11 | No schema, OpenAPI, SDK, MCP, or reference-server change. No pin change. No new webhook topic. |
 | C12 | `customers/redact` deletes the session row for the recomputed `sub`. `customers/data_request` deletes that row on purpose and exports nothing, because the connector keeps no order archive. After a secret rotation, redact does not find rows written under the old secret. Those rows wait for the lazy purge. |
 | C13 | The login GET shows the user code and the grant sentence before any redirect. The first GET consumes the link and sets `__Host-fastbuyjson-login` (`HttpOnly`, `Secure`, `Path=/`, `SameSite=Lax`, no `Domain`). The callback requires that cookie. `state` is marked used before the code exchange. |
-| C14 | Start is limited to 10 attempts per TCP peer per 10 minutes and 100 live poll rows. Poll is at most one request per row per 2 seconds. Expired poll and session rows are deleted on the next start, poll, callback, or customer-mode order read. |
+| C14 | Start is limited to 10 attempts per client address per 10 minutes and 100 live poll rows. The address defaults to the TCP peer, which is shop-wide behind the HTTPS proxy. Optional `SHOPIFY_TRUSTED_PROXY_HOPS` reads `X-Forwarded-For` from the right and does not fall back to the socket when the header is missing. Poll is at most one request per row per 2 seconds. Expired poll and session rows are deleted on the next start, poll, callback, or customer-mode order read. |
 | C15 | Name and Email are declared for protected customer data level 2 from the login pull request. Address is declared when addresses are returned. Phone is not declared. The body still omits name, email, and phone. |
 | C16 | One session row per `sub`. A second login overwrites the customer access token. Outstanding JWTs for that `sub` stay valid until their own `exp`. There is no logout route and no `id_token_hint`. |
 

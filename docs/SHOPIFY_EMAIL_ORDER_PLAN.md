@@ -258,7 +258,7 @@ This repository needs no further code change for PR 2. `getOrderStatus` stays on
 
 **Partial objects become 500 if they are emitted.** The omit-whole-object rule is what keeps a missing zip on **200**. A later edit that returns a partial address reintroduces that **500**.
 
-**API calendar.** `SHOPIFY_PLAN.md` records that 2026-10 falls out of support on 2026-10-16. This phase does not bump the pin. A later pull request bumps it while a version is still supported, and re-checks `Order.email` and the `MailingAddress` fields on that pin. If a field is gone, addresses stay omitted until a plan names the replacement. The connector does not invent one during the bump.
+**API calendar.** `SHOPIFY_PLAN.md` records that 2026-10 stays accessible until 2027-10-16 15:00 UTC. This phase does not bump the pin. A later pull request bumps it while a version is still supported, and re-checks `Order.email` and the `MailingAddress` fields on that pin. If a field is gone, addresses stay omitted until a plan names the replacement. The connector does not invent one during the bump.
 
 **A public listing is a different approval.** Level 2 is always available for this custom app. Listing the app later requires protected-customer-data review for Address and Email. This phase does not list the app.
 

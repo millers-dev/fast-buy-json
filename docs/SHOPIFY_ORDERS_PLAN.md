@@ -258,7 +258,7 @@ This repository needs no further code change for PR 2. The reference MCP server 
 
 **Confirmation numbers collide.** Two nodes is a 404. Returning one of them would attach the wrong items and tracking number to the token the agent sent.
 
-**API calendar.** `SHOPIFY_PLAN.md` records that 2026-10 falls out of support on 2026-10-16. This phase does not bump the pin. A later pull request bumps it while a version is still supported. The order mapper is re-checked on that bump.
+**API calendar.** `SHOPIFY_PLAN.md` records that 2026-10 stays accessible until 2027-10-16 15:00 UTC. This phase does not bump the pin. A later pull request bumps it while a version is still supported. The order mapper is re-checked on that bump.
 
 **Contract identity.** `docs/CONTRACT.md` says order identity is the JWT `sub`. This connector already ignores Bearer for cart. The order route does the same. `/detect` shows `anonymous` and does not show `auth`.
 

@@ -152,7 +152,7 @@ This repository needs no further code change for PR 2. `getOrderStatus` is alrea
 
 **Truncation.** Passing `first` on `fulfillments` hides later nodes. The selection omits `first`. If a future pin makes `first` required, PR 2 stops on that fixture. It does not pick a page size.
 
-**API calendar.** `SHOPIFY_PLAN.md` records that 2026-10 falls out of support on 2026-10-16. This phase does not bump the pin. A later pull request bumps it while a version is still supported, and re-checks `deliveredAt` on that pin. If the field is gone, `delivered` stays unmapped until a plan names the replacement. The connector does not invent one during the bump.
+**API calendar.** `SHOPIFY_PLAN.md` records that 2026-10 stays accessible until 2027-10-16 15:00 UTC. This phase does not bump the pin. A later pull request bumps it while a version is still supported, and re-checks `deliveredAt` on that pin. If the field is gone, `delivered` stays unmapped until a plan names the replacement. The connector does not invent one during the bump.
 
 **Order-level vocabulary.** Agents that treat `FULFILLED` as delivered will still see `shipped` when the date is absent. That is the order-status plan’s row, kept on purpose.
 
