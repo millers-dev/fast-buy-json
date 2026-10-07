@@ -2,7 +2,7 @@
 
 Status: proposed. English only. This file is the implementation plan for logging a buyer into the Shopify connector with Customer Accounts, and for requiring that login on `GET /api/fastbuyjson/orders/{orderId}`. It is documentation. Accepting it does not change the HTTP contract’s schemas, the OpenAPI document, the reference servers, the TypeScript SDK, the MCP server, or the connector runtime.
 
-Checked against this repository at **1.0.0** (`docs/CONTRACT.md`, `schemas/order-status.json`, OpenAPI `getOrderStatus`) and against Shopify’s public docs on **2026-10-06**. Sources are listed at the end. The order route, the lookup, and the status map stay in [`SHOPIFY_ORDERS_PLAN.md`](SHOPIFY_ORDERS_PLAN.md). Mapping `delivered` stays in [`SHOPIFY_DELIVERED_PLAN.md`](SHOPIFY_DELIVERED_PLAN.md). The email address gate stays in [`SHOPIFY_EMAIL_ORDER_PLAN.md`](SHOPIFY_EMAIL_ORDER_PLAN.md) until the final pull request of this plan removes it. The v1 sequence stays in [`SHOPIFY_PLAN.md`](SHOPIFY_PLAN.md).
+Checked against this repository at **1.0.0** (`docs/CONTRACT.md`, `schemas/order-status.json`, OpenAPI `getOrderStatus`) and against Shopify’s public docs on **2026-10-06**. Sources are listed at the end. The order route, the lookup, and the status map stay in [`SHOPIFY_ORDERS_PLAN.md`](SHOPIFY_ORDERS_PLAN.md). Mapping `delivered` stays in [`SHOPIFY_DELIVERED_PLAN.md`](SHOPIFY_DELIVERED_PLAN.md). The email address gate stays in [`SHOPIFY_EMAIL_ORDER_PLAN.md`](SHOPIFY_EMAIL_ORDER_PLAN.md) until the final pull request of this plan removes it. The v1 sequence stays in [`SHOPIFY_PLAN.md`](SHOPIFY_PLAN.md). The reference MCP tools that send the JWT are [`SHOPIFY_MCP_LOGIN_PLAN.md`](SHOPIFY_MCP_LOGIN_PLAN.md).
 
 The defaults in section 1 were accepted on **2026-10-06** by Tomasz. Section 11 lists them again so a review comment can overturn one without reopening the rest.
 
@@ -43,7 +43,7 @@ Accepting this plan accepts those defaults.
 - No refresh token, no `POST /auth/refresh` on the connector, and no `prompt=none` renewal.
 - No Multipass, no Storefront `customerAccessTokenCreate`, and no headless or Hydrogen customer-account client.
 - The body still omits email, phone, name, `lastFourDigits`, and `brand`.
-- The reference MCP tool `getOrderStatus` stays a bare `GET /orders/{orderId}`. After the final pull request that call receives **401**. A later plan can add a login tool. This one does not.
+- The reference MCP tool `getOrderStatus` stays a bare `GET /orders/{orderId}`. After the final pull request that call receives **401**. The login tools that obtain the JWT are [`SHOPIFY_MCP_LOGIN_PLAN.md`](SHOPIFY_MCP_LOGIN_PLAN.md). This plan does not add them.
 
 ## 4. Identity model
 
@@ -388,7 +388,7 @@ Each connector pull request merges on its own. Runtime stays Node.js 18+, TypeSc
 
 PR 5 is the end state in section 1. PR 2 through PR 4 are the path that keeps today’s anonymous order route working until that pull request.
 
-This repository needs no further code change for those pull requests. The reference MCP server keeps calling `GET /orders/{orderId}` with no Bearer token. After PR 5 that call receives **401** `AUTHENTICATION_REQUIRED`. Pointing `FASTBUYJSON_API_URL` at the connector does not add a login tool.
+This repository needs no further code change for those pull requests. The reference MCP server keeps calling `GET /orders/{orderId}` with no Bearer token. After PR 5 that call receives **401** `AUTHENTICATION_REQUIRED`. Pointing `FASTBUYJSON_API_URL` at the connector does not add a login tool. Those tools are [`SHOPIFY_MCP_LOGIN_PLAN.md`](SHOPIFY_MCP_LOGIN_PLAN.md).
 
 The Partner Dashboard declaration and the `[customer_authentication]` redirect are app settings. The redirect URI is also a line in the connector’s app configuration. The field declaration is not a commit in this repository.
 
@@ -420,7 +420,7 @@ The Partner Dashboard declaration and the `[customer_authentication]` redirect a
 
 **Detect cannot say “orders are strict, cart is not”.** `authentication.methods` lists both `anonymous` and `jwt`. Clients that treat `anonymous` as “every commerce route is optional” will see **401** on orders. That is the end state, not a detect bug this plan papers over with a schema change.
 
-**Reference MCP.** `mcp-server/src/adapter.ts` `getOrderStatus` sends no Authorization header. After PR 5 the tool fails with `AUTHENTICATION_REQUIRED`. Cart and checkout tools keep working. This plan does not change the MCP server.
+**Reference MCP.** `mcp-server/src/adapter.ts` `getOrderStatus` sends no Authorization header. After PR 5 the tool fails with `AUTHENTICATION_REQUIRED`. Cart and checkout tools keep working. This plan does not change the MCP server. Customer login, demo username login, and refresh on that server are [`SHOPIFY_MCP_LOGIN_PLAN.md`](SHOPIFY_MCP_LOGIN_PLAN.md).
 
 **Secret rotation.** Changing `SHOPIFY_CUSTOMER_SUB_SECRET` splits identity for the same Shopify customer across the rotation. Carts are unaffected because they stay anonymous. Order history has no local archive keyed by `sub`. `customers/redact` cannot find a row written under the previous secret. That row remains until the customer access token expires and section 7.2’s lazy purge deletes it.
 
@@ -461,7 +461,7 @@ FastBuyJSON, this repository, release 1.0.0:
 - `schemas/order-status.json` — `OrderStatusResponse`. Optional addresses. No `userId`. This plan does not edit the schema.
 - OpenAPI operation `getOrderStatus` — path parameter `orderId`, no email parameter, `Cache-Control: no-store` on the 200 response. This plan does not edit the document.
 - `examples/responses/auth-login-200.json` — reference login returns `access_token`, `refresh_token`, `token_type`, and `expires_in`. The connector poll returns a JWT `access_token` and does not return `refresh_token`.
-- `mcp-server/src/adapter.ts` — `getOrderStatus` sends no Authorization header. `login` posts username and password to `/auth/login`. This plan does not change that file.
+- `mcp-server/src/adapter.ts` — `getOrderStatus` sends no Authorization header. `login` posts username and password to `/auth/login`. This plan does not change that file. The follow-on is [`SHOPIFY_MCP_LOGIN_PLAN.md`](SHOPIFY_MCP_LOGIN_PLAN.md).
 - `schemas/detect-response.json` — `endpoints` may include `auth`. `authentication.methods` may include `jwt` and `anonymous`. This plan does not edit the schema.
 
 Shopify, read 2026-10-06. The connector still pins API `2026-10`.

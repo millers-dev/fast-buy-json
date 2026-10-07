@@ -10,6 +10,8 @@ Start the API before the client (`npm start` in the repo root, or the Python ser
 
 Tool names, including shipping and discount, are listed in [`../mcp-server/README.md`](../mcp-server/README.md).
 
+After the Shopify connector’s customer-accounts pull request 5 ([`SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md`](SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md)), `GET /orders/{orderId}` requires a FastBuyJSON JWT. `fastbuy_get_order_status` then receives **401** `AUTHENTICATION_REQUIRED` until the buyer is logged in. Login and refresh tools are planned in [`SHOPIFY_MCP_LOGIN_PLAN.md`](SHOPIFY_MCP_LOGIN_PLAN.md). Cart and checkout stay anonymous.
+
 ## Claude Desktop
 
 `mcp-server/install.sh` is the installer. It requires Node.js 18+, runs `npm install` and `npm run build`, and writes or prints `claude_desktop_config.json`.
