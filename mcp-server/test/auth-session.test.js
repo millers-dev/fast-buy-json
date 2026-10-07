@@ -472,6 +472,79 @@ test('poll complete ignores a refresh_token in the body', async () => {
   });
 });
 
+test('poll complete without a usable access token stores nothing and drops the poll token', async () => {
+  const accessToken = 'access-token-bad-complete-bb88';
+  const refreshToken = 'refresh-token-kept-bb88';
+  const pollToken = 'poll-token-bad-complete-bb88';
+  const leakedRefresh = 'refresh-token-from-bad-complete-bb88';
+  const quote = 'QUOTE-BODY-bb88-do-not-echo';
+  const bodies = [
+    { status: 'complete', refresh_token: leakedRefresh, note: quote },
+    { status: 'complete', access_token: '', refresh_token: leakedRefresh, note: quote },
+    { status: 'complete', access_token: 0, refresh_token: leakedRefresh, note: quote },
+  ];
+
+  for (const body of bodies) {
+    await withAdapter(async (request, res) => {
+      if (request.method === 'GET' && request.url === '/detect') {
+        send(res, 200, customerDetect);
+        return;
+      }
+      if (request.method === 'POST' && request.url === '/auth/login') {
+        send(res, 200, {
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          expires_in: 3600,
+        });
+        return;
+      }
+      if (request.method === 'POST' && request.url === '/auth/customer/start') {
+        send(res, 200, {
+          loginUrl: 'https://shop.example/login',
+          userCode: 'ABCD',
+          pollToken,
+        });
+        return;
+      }
+      if (request.method === 'POST' && request.url === '/auth/customer/poll') {
+        send(res, 200, body);
+        return;
+      }
+      if (request.method === 'GET' && request.url === '/orders/order-1') {
+        send(res, 200, { id: 'order-1' });
+        return;
+      }
+      if (request.method === 'POST' && request.url === '/auth/refresh') {
+        send(res, 200, { access_token: 'access-after-bad-complete-bb88', expires_in: 60 });
+        return;
+      }
+      send(res, 500, problem(500, 'UNEXPECTED', request.url));
+    }, async (adapter, requests) => {
+      await adapter.login('demo-user', 'password-bb88');
+      await adapter.customerLoginStart();
+      const message = await rejectMessage(() => adapter.customerLoginPoll());
+      assert.equal(message, 'Customer login poll completed without an access token.');
+      assertNoSecrets(message, [accessToken, refreshToken, pollToken, leakedRefresh, quote, 'password-bb88']);
+      assert.equal(calls(requests, 'POST', '/auth/customer/poll').length, 1);
+
+      await adapter.getOrderStatus('order-1');
+      assert.equal(
+        calls(requests, 'GET', '/orders/order-1')[0].authorization,
+        `Bearer ${accessToken}`
+      );
+
+      const pollMessage = await rejectMessage(() => adapter.customerLoginPoll());
+      assert.match(pollMessage, /fastbuy_get_order_status/);
+      assert.equal(calls(requests, 'POST', '/auth/customer/poll').length, 1);
+
+      await adapter.authRefresh();
+      const refreshCalls = calls(requests, 'POST', '/auth/refresh');
+      assert.equal(refreshCalls.length, 1);
+      assert.deepEqual(refreshCalls[0].body, { refresh_token: refreshToken });
+    });
+  }
+});
+
 test('second poll after complete does not call the network', async () => {
   await withAdapter(async (request, res) => {
     if (request.method === 'GET' && request.url === '/detect') {
@@ -688,6 +761,50 @@ test('refresh with no token and customer detect names customer start and poll', 
   });
 });
 
+test('refresh with no token does not pick a login tool when detect fails or names neither route', async () => {
+  const neitherHint = /GET \/detect did not name a login route\. Do not pick customer start or fastbuy_login as the only next step\./;
+
+  await withAdapter(async (request, res) => {
+    if (request.method === 'GET' && request.url === '/detect') {
+      send(res, 503, problem(503, 'UNAVAILABLE', 'detect down QUOTE-DETECT-cc99'));
+      return;
+    }
+    send(res, 500, problem(500, 'UNEXPECTED', request.url));
+  }, async (adapter, requests) => {
+    const message = await rejectMessage(() => adapter.authRefresh());
+    assert.match(message, /No refresh token is stored/);
+    assert.match(message, neitherHint);
+    assert.doesNotMatch(message, /Run fastbuy_customer_login_start/);
+    assert.doesNotMatch(message, /Run fastbuy_login/);
+    assert.equal(message.includes('QUOTE-DETECT-cc99'), false);
+    assert.equal(calls(requests, 'POST', '/auth/refresh').length, 0);
+    assert.equal(calls(requests, 'GET', '/detect').length, 1);
+  });
+
+  await withAdapter(async (request, res) => {
+    if (request.method === 'GET' && request.url === '/detect') {
+      send(res, 200, {
+        authentication: {
+          methods: ['anonymous'],
+          endpoints: ['auth', '/auth/certificate'],
+        },
+      });
+      return;
+    }
+    send(res, 500, problem(500, 'UNEXPECTED', request.url));
+  }, async (adapter, requests) => {
+    const message = await rejectMessage(() => adapter.authRefresh());
+    assert.match(message, /No refresh token is stored/);
+    assert.match(message, neitherHint);
+    assert.doesNotMatch(message, /Run fastbuy_customer_login_start/);
+    assert.doesNotMatch(message, /Run fastbuy_login/);
+    assert.equal(calls(requests, 'POST', '/auth/refresh').length, 0);
+    assert.equal(calls(requests, 'POST', '/auth/customer/start').length, 0);
+    assert.equal(calls(requests, 'POST', '/auth/login').length, 0);
+    assert.equal(calls(requests, 'GET', '/detect').length, 1);
+  });
+});
+
 test('login 401 keeps a previously stored JWT', async () => {
   const accessToken = 'access-token-login401-99cc';
   let logins = 0;
@@ -900,6 +1017,87 @@ test('expired access token blocks order status and clears the poll token', async
 
       await assert.rejects(() => adapter.customerLoginPoll());
       assert.equal(calls(requests, 'POST', '/auth/customer/poll').length, 0);
+    });
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test('expired access token with a stored refresh token names fastbuy_auth_refresh and does not call the network', async () => {
+  const accessToken = 'access-token-expired-refresh-aa77';
+  const refreshToken = 'refresh-token-expired-aa77';
+  const pollToken = 'poll-token-expired-refresh-aa77';
+  const nextAccess = 'access-token-after-expiry-refresh-aa77';
+  const originalNow = Date.now;
+  let now = originalNow();
+  Date.now = () => now;
+
+  try {
+    await withAdapter(async (request, res) => {
+      if (request.method === 'GET' && request.url === '/detect') {
+        send(res, 200, customerDetect);
+        return;
+      }
+      if (request.method === 'POST' && request.url === '/auth/login') {
+        send(res, 200, {
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          expires_in: 3600,
+        });
+        return;
+      }
+      if (request.method === 'POST' && request.url === '/auth/customer/start') {
+        send(res, 200, {
+          loginUrl: 'https://shop.example/login',
+          userCode: 'ABCD',
+          pollToken,
+        });
+        return;
+      }
+      if (request.method === 'GET' && request.url.startsWith('/orders/')) {
+        send(res, 500, problem(500, 'UNEXPECTED', 'order should not be called'));
+        return;
+      }
+      if (request.method === 'POST' && request.url === '/auth/refresh') {
+        send(res, 200, { access_token: nextAccess, expires_in: 600 });
+        return;
+      }
+      if (request.method === 'POST' && request.url === '/auth/customer/poll') {
+        send(res, 500, problem(500, 'UNEXPECTED', 'poll should not be called'));
+        return;
+      }
+      send(res, 404, problem(404, 'NOT_FOUND', request.url));
+    }, async (adapter, requests) => {
+      await adapter.login('demo-user', 'password-aa77');
+      await adapter.customerLoginStart();
+      now += 3600 * 1000 + 1;
+
+      const before = requests.length;
+      const message = await rejectMessage(() => adapter.getOrderStatus('order-1'));
+      assert.equal(requests.length, before);
+      assert.match(message, /fastbuy_auth_refresh/);
+      assert.match(message, /Run fastbuy_auth_refresh once/);
+      assert.match(message, /session expired/i);
+      assert.equal(/poll/i.test(message), false);
+      assert.equal(message.includes('fastbuy_customer_login_start'), false);
+      assert.equal(message.includes('fastbuy_get_order_status'), false);
+      assertNoSecrets(message, [accessToken, refreshToken, pollToken, 'password-aa77']);
+
+      const afterFirst = requests.length;
+      await assert.rejects(() => adapter.getOrderStatus('order-2'));
+      assert.equal(requests.length, afterFirst);
+      assert.equal(requests.some((request) => request.url.startsWith('/orders/')), false);
+
+      const pollMessage = await rejectMessage(() => adapter.customerLoginPoll());
+      assert.match(pollMessage, /nothing to poll/);
+      assert.equal(calls(requests, 'POST', '/auth/customer/poll').length, 0);
+
+      const refreshed = await adapter.authRefresh();
+      assert.deepEqual(refreshed, { status: 'complete', expires_in: 600 });
+      const refreshCalls = calls(requests, 'POST', '/auth/refresh');
+      assert.equal(refreshCalls.length, 1);
+      assert.deepEqual(refreshCalls[0].body, { refresh_token: refreshToken });
+      assertNoSecrets(JSON.stringify(refreshed), [accessToken, refreshToken, nextAccess]);
     });
   } finally {
     Date.now = originalNow;
