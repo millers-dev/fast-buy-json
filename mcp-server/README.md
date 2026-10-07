@@ -20,7 +20,7 @@ Use `http://localhost:8000/api/fastbuyjson` when the Python demo is the API. The
 
 ## Tools
 
-`src/index.ts` registers these nine tools against the live API:
+`src/index.ts` registers these tools against the live API:
 
 | Tool | What it does |
 |------|----------------|
@@ -33,6 +33,10 @@ Use `http://localhost:8000/api/fastbuyjson` when the Python demo is the API. The
 | `fastbuy_apply_discount` | Apply a promo code, or clear it when `code` is omitted or null |
 | `fastbuy_checkout_confirm` | Confirm checkout with payment details |
 | `fastbuy_get_order_status` | Read order status and tracking |
+| `fastbuy_customer_login_start` | Start Shopify customer login when detect lists `jwt` and `/auth/customer/start`. Returns `loginUrl` and `userCode` only |
+| `fastbuy_customer_login_poll` | Poll that login. Pending stays pending. Complete stores the JWT in the process and does not return it |
+| `fastbuy_login` | Username and password login for the reference Node and Python demos. Stores access and refresh tokens in the process and does not return them |
+| `fastbuy_auth_refresh` | Exchange a stored demo refresh token. Does not call the network when no refresh token is stored |
 
 ## Run
 
@@ -50,7 +54,7 @@ Mock entry (canned data, not the live tool list above):
 npm run start:mock
 ```
 
-That runs `dist/index-mock.js` (`src/index-mock.ts`). Use `src/index.ts` when you need the nine tools, including shipping and discount.
+That runs `dist/index-mock.js` (`src/index-mock.ts`). Use `src/index.ts` when you need the live tools, including shipping, discount, and login.
 
 ## Claude Desktop
 
