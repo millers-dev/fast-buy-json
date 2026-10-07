@@ -120,11 +120,46 @@ const GetOrderStatusSchema = z.object({
   orderId: z.string(),
 });
 
+const NoArgsSchema = z.object({});
+
+const LoginSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
+
+function parseLogin(args: unknown): { username: string; password: string } {
+  const parsed = LoginSchema.safeParse(args);
+  if (!parsed.success) {
+    throw new Error('username and password are required strings');
+  }
+  return parsed.data;
+}
+
+const COMMERCE_REAUTH_HINT =
+  'If the error is AUTHENTICATION_REQUIRED or INVALID_TOKEN, follow the error and do not call poll to recover.';
+
+const CUSTOMER_POLL_DESCRIPTION = [
+  'Poll the Shopify customer login started by fastbuy_customer_login_start. No arguments. The poll token stays in this process. The server does not sleep or retry.',
+  'The connector poll row lives 10 minutes.',
+  'status pending means call this tool again later. Do not call fastbuy_get_order_status while the login is pending.',
+  'A 429 means wait and call this tool again. Do not start a second login while this poll token is still stored.',
+  'After status complete, do not call this tool again. Call fastbuy_get_order_status for the order.',
+  'If this tool reports that no login is in progress, do not call fastbuy_get_order_status and do not call this tool again. Run only the login tool the error names.',
+  'A 401 means this attempt is finished. Do not call fastbuy_get_order_status to check it. Run fastbuy_customer_login_start again. Poll 401 is also the stop signal when expiresAt has passed.',
+].join(' ');
+
+const ORDER_STATUS_DESCRIPTION = [
+  'Get the status and tracking information for an order.',
+  'A result of AUTHENTICATION_REQUIRED or INVALID_TOKEN, or an error that says the session expired, means do not call this tool again and do not call fastbuy_customer_login_poll.',
+  'Call fastbuy_auth_refresh only when the error names it. Call fastbuy_customer_login_start and then poll only when the error names customer login. Call fastbuy_login only when the error names it.',
+  'Calling poll after this error does not recover a session. There is no poll token after a finished login, after local expiry, or after this 401.',
+].join(' ');
+
 // Define available tools
 const tools: Tool[] = [
   {
     name: 'fastbuy_search_products',
-    description: 'Search for products in FastBuyJSON-compatible e-commerce stores',
+    description: `Search for products in FastBuyJSON-compatible e-commerce stores. ${COMMERCE_REAUTH_HINT}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -172,7 +207,7 @@ const tools: Tool[] = [
   },
   {
     name: 'fastbuy_add_to_cart',
-    description: 'Add a product to the shopping cart',
+    description: `Add a product to the shopping cart. ${COMMERCE_REAUTH_HINT}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -196,7 +231,7 @@ const tools: Tool[] = [
   },
   {
     name: 'fastbuy_get_cart',
-    description: 'Get the current cart contents',
+    description: `Get the current cart contents. ${COMMERCE_REAUTH_HINT}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -209,7 +244,7 @@ const tools: Tool[] = [
   },
   {
     name: 'fastbuy_checkout_initiate',
-    description: 'Initiate the checkout process with customer and shipping information',
+    description: `Initiate the checkout process with customer and shipping information. ${COMMERCE_REAUTH_HINT}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -267,7 +302,7 @@ const tools: Tool[] = [
   },
   {
     name: 'fastbuy_get_shipping_options',
-    description: 'List shipping options for the current cart context',
+    description: `List shipping options for the current cart context. ${COMMERCE_REAUTH_HINT}`,
     inputSchema: {
       type: 'object',
       properties: {},
@@ -275,7 +310,7 @@ const tools: Tool[] = [
   },
   {
     name: 'fastbuy_apply_discount',
-    description: 'Apply or clear a promotional discount on the cart',
+    description: `Apply or clear a promotional discount on the cart. ${COMMERCE_REAUTH_HINT}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -288,7 +323,7 @@ const tools: Tool[] = [
   },
   {
     name: 'fastbuy_checkout_confirm',
-    description: 'Confirm checkout and complete the order with payment details',
+    description: `Confirm checkout and complete the order with payment details. ${COMMERCE_REAUTH_HINT}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -342,7 +377,7 @@ const tools: Tool[] = [
   },
   {
     name: 'fastbuy_get_order_status',
-    description: 'Get the status and tracking information for an order',
+    description: ORDER_STATUS_DESCRIPTION,
     inputSchema: {
       type: 'object',
       properties: {
@@ -366,6 +401,48 @@ const tools: Tool[] = [
         },
       },
       required: ['url'],
+    },
+  },
+  {
+    name: 'fastbuy_customer_login_start',
+    description: 'Start Shopify customer login when GET /detect lists jwt and /auth/customer/start. Reference Node and Python demos do not advertise that route; use fastbuy_login for those. Show loginUrl and userCode to the user, and tell the user to continue in the browser only when the page shows the same code. The poll row lives 10 minutes. A poll 401 is the stop signal: run this tool again and do not keep polling. The next step is fastbuy_customer_login_poll. Do not ask the user for a poll token. A 429 RATE_LIMITED means wait and call this tool again. Do not call poll for the attempt that was limited. The server does not sleep or retry.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'fastbuy_customer_login_poll',
+    description: CUSTOMER_POLL_DESCRIPTION,
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'fastbuy_login',
+    description: 'Username and password login for the reference Node and Python demos. A Shopify customer session uses fastbuy_customer_login_start and fastbuy_customer_login_poll instead. The server does not sleep or retry.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        username: {
+          type: 'string',
+          description: 'Demo username',
+        },
+        password: {
+          type: 'string',
+          description: 'Demo password',
+        },
+      },
+      required: ['username', 'password'],
+    },
+  },
+  {
+    name: 'fastbuy_auth_refresh',
+    description: 'Exchange a stored refresh token at POST /auth/refresh. If no refresh token is stored, this tool does not call the network. The error names fastbuy_customer_login_start and fastbuy_customer_login_poll when GET /detect lists jwt and /auth/customer/start. The error names fastbuy_login when GET /detect lists /auth/login and does not list /auth/customer/start. Do not assume customer start. The server does not sleep or retry.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
     },
   },
 ];
@@ -489,6 +566,58 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'fastbuy_detect_support': {
         const { url } = args as { url: string };
         const result = await adapter.detectSupport(url);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'fastbuy_customer_login_start': {
+        NoArgsSchema.parse(args ?? {});
+        const result = await adapter.customerLoginStart();
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'fastbuy_customer_login_poll': {
+        NoArgsSchema.parse(args ?? {});
+        const result = await adapter.customerLoginPoll();
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'fastbuy_login': {
+        const validated = parseLogin(args);
+        const result = await adapter.login(validated.username, validated.password);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'fastbuy_auth_refresh': {
+        NoArgsSchema.parse(args ?? {});
+        const result = await adapter.authRefresh();
         return {
           content: [
             {

@@ -10,7 +10,7 @@ Start the API before the client (`npm start` in the repo root, or the Python ser
 
 Tool names, including shipping and discount, are listed in [`../mcp-server/README.md`](../mcp-server/README.md).
 
-After the Shopify connector’s customer-accounts pull request 5 ([`SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md`](SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md)), `GET /orders/{orderId}` requires a FastBuyJSON JWT. `fastbuy_get_order_status` then receives **401** `AUTHENTICATION_REQUIRED` until the buyer is logged in. Login and refresh tools are planned in [`SHOPIFY_MCP_LOGIN_PLAN.md`](SHOPIFY_MCP_LOGIN_PLAN.md). Cart and checkout stay anonymous.
+After the Shopify connector’s customer-accounts pull request 5 ([`SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md`](SHOPIFY_CUSTOMER_ACCOUNTS_PLAN.md)), `GET /orders/{orderId}` requires a FastBuyJSON JWT. `fastbuy_get_order_status` then receives **401** `AUTHENTICATION_REQUIRED` until the buyer is logged in. Customer login is `fastbuy_customer_login_start` and `fastbuy_customer_login_poll` after the connector advertises them. The reference Node and Python demos use `fastbuy_login` and `fastbuy_auth_refresh`. See [`SHOPIFY_MCP_LOGIN_PLAN.md`](SHOPIFY_MCP_LOGIN_PLAN.md). Cart and checkout stay anonymous.
 
 ## Claude Desktop
 
