@@ -24,12 +24,12 @@
     "author": "FastBuyJSON Team",
     "license": "MIT",
     "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.25.1",
-        "axios": "^1.12.2",
+        "@modelcontextprotocol/sdk": "^1.32.2",
+        "axios": "^1.21.0",
         "zod": "^3.25.76"
     },
     "devDependencies": {
-        "@types/node": "^22.0.0",
+        "@types/node": "^22.20.5",
         "typescript": "^5.5.0"
     },
     "engines": {
