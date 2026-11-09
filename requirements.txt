@@ -1,7 +1,7 @@
 fastapi==0.110.*
-uvicorn[standard]==0.30.*
+uvicorn[standard]==0.54.*
 jsonschema==4.22.*
-pytest==7.4.*
+pytest==9.2.*
 requests==2.34.*
 python-dotenv==1.0.*
 pydantic>=2.14.3,<3
