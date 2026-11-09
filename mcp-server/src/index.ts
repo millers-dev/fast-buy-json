@@ -47,7 +47,7 @@ const SearchProductsSchema = z.object({
       currency: z.string().optional(),
     }).optional(),
     availability: z.array(z.string()).optional(),
-    extensions: z.record(z.unknown()).optional(),
+    extensions: z.record(z.string(), z.unknown()).optional(),
   }).optional(),
   sort: z.enum(['price_asc', 'price_desc', 'name_asc', 'name_desc', 'relevance', 'newest']).optional(),
   page: z.number().min(1).default(1),
@@ -57,8 +57,8 @@ const SearchProductsSchema = z.object({
 const AddToCartSchema = z.object({
   productId: z.string(),
   quantity: z.number().min(1).default(1),
-  options: z.record(z.string()).optional(),
-  extensions: z.record(z.unknown()).optional(),
+  options: z.record(z.string(), z.string()).optional(),
+  extensions: z.record(z.string(), z.unknown()).optional(),
 });
 
 const CheckoutInitiateSchema = z.object({
@@ -87,7 +87,7 @@ const CheckoutInitiateSchema = z.object({
   }).optional(),
   shippingOptionId: z.string().optional(),
   discountCode: z.string().optional(),
-  extensions: z.record(z.unknown()).optional(),
+  extensions: z.record(z.string(), z.unknown()).optional(),
 });
 
 const ApplyDiscountSchema = z.object({
