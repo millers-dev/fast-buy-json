@@ -1,6 +1,6 @@
 fastapi==0.110.*
 uvicorn[standard]==0.54.*
-jsonschema==4.22.*
+jsonschema==4.26.*
 pytest==9.2.*
 requests==2.34.*
 python-dotenv==1.0.*
