@@ -3,7 +3,7 @@ uvicorn[standard]==0.54.*
 jsonschema==4.26.*
 pytest==9.2.*
 requests==2.34.*
-python-dotenv==1.0.*
+python-dotenv==1.2.*
 pydantic>=2.14.3,<3
 python-jose[cryptography]==3.3.*
 passlib[bcrypt]==1.7.*
